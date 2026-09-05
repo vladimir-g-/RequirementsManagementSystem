@@ -1,0 +1,82 @@
+{
+  "users": [
+    {
+      "id": "user-admin",
+      "username": "admin",
+      "passwordHash": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
+      "name": "Администратор"
+    }
+  ],
+  "projects": [
+    {
+      "id": "project-alpha",
+      "name": "Платформа аналитики",
+      "code": "ANL"
+    },
+    {
+      "id": "project-beta",
+      "name": "Мобильное приложение",
+      "code": "MOB"
+    }
+  ],
+  "requirements": [
+    {
+      "id": "req-1",
+      "number": "ANL-001",
+      "description": "Пользователь может экспортировать отчет в PDF",
+      "type": "Функциональное",
+      "priority": "Высокая",
+      "complexity": "Средняя",
+      "status": "В работе",
+      "release": "2.1",
+      "projectId": "project-alpha",
+      "detailsMarkdown": "Система _должна_ поддерживать экспорт в **PDF **формат.\n- Пункт 1\n- Пункт 2\n"
+    },
+    {
+      "id": "req-2",
+      "number": "ANL-002",
+      "description": "Система сохраняет историю изменений отчета",
+      "type": "Функциональное",
+      "priority": "Средняя",
+      "complexity": "Высокая",
+      "status": "Запланировано",
+      "release": "2.2",
+      "projectId": "project-alpha"
+    },
+    {
+      "id": "req-3",
+      "number": "MOB-001",
+      "description": "Приложение поддерживает вход по биометрии",
+      "type": "Безопасность",
+      "priority": "Критическая",
+      "complexity": "Высокая",
+      "status": "Готово",
+      "release": "1.4",
+      "projectId": "project-beta"
+    },
+    {
+      "id": "924b144d-ca74-46e9-af0d-ca633e6ca2b2",
+      "number": "ANL-003",
+      "description": "Скорость формирования отчета",
+      "detailsMarkdown": "Отчет должен формироваться не дольше 3 секунд.",
+      "type": "Нефункциональное",
+      "priority": "Критическая",
+      "complexity": "Средняя",
+      "status": "Запланировано",
+      "release": "1",
+      "projectId": "project-alpha"
+    },
+    {
+      "id": "54d32ad6-0bb0-4e6c-b40a-35f4720ec9ee",
+      "number": "MOB-002",
+      "description": "Приложение поддерживает смену языка пользовательского интерфейса",
+      "detailsMarkdown": "Приложение позволяет изменить язык пользовательского интерфейса.",
+      "type": "Нефункциональное",
+      "priority": "Высокая",
+      "complexity": "",
+      "status": "Запланировано",
+      "release": "",
+      "projectId": "project-beta"
+    }
+  ]
+}

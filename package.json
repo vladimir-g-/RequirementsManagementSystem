@@ -1,0 +1,17 @@
+{
+  "name": "requirements-management-system",
+  "version": "1.0.0",
+  "description": "Node.js project for a requirements management system",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "keywords": [
+    "nodejs",
+    "requirements-management"
+  ],
+  "author": "",
+  "license": "ISC"
+}

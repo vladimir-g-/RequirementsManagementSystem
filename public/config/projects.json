@@ -1,0 +1,12 @@
+[
+  {
+    "id": "project-alpha",
+    "name": "Платформа аналитики",
+    "code": "ANL"
+  },
+  {
+    "id": "project-beta",
+    "name": "Мобильное приложение",
+    "code": "MOB"
+  }
+]
