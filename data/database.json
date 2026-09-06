@@ -30,7 +30,7 @@
       "status": "В работе",
       "release": "2.1",
       "projectId": "project-alpha",
-      "detailsMarkdown": "Система _должна_ поддерживать экспорт в **PDF **формат.\n- Пункт 1\n- Пункт 2\n"
+      "detailsMarkdown": "Система _должна_ поддерживать экспорт в **PDF **формат.\n- Пункт 1\n- Пункт 2\n- Пункт 3"
     },
     {
       "id": "req-2",
@@ -41,7 +41,8 @@
       "complexity": "Высокая",
       "status": "Запланировано",
       "release": "2.2",
-      "projectId": "project-alpha"
+      "projectId": "project-alpha",
+      "detailsMarkdown": "Система должна сохранять историю изменений отчета."
     },
     {
       "id": "req-3",

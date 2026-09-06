@@ -114,9 +114,14 @@ const server = createServer(async (request, response) => {
     if (path === '/api/requirements' && request.method === 'GET') {
       const projectId = url.searchParams.get('projectId');
       const search = (url.searchParams.get('search') || '').toLowerCase();
-      const status = url.searchParams.get('status');
-      const requirements = data.requirements.filter((item) => (!projectId || item.projectId === projectId) && (!status || item.status === status) && (!search || `${item.number} ${item.description} ${item.type}`.toLowerCase().includes(search)));
-      return sendJson(response, 200, { requirements });
+      const filters = ['type', 'priority', 'status', 'complexity', 'release'].reduce((result, key) => {
+        result[key] = url.searchParams.getAll(key);
+        return result;
+      }, {});
+      const projectRequirements = data.requirements.filter((item) => !projectId || item.projectId === projectId);
+      const requirements = projectRequirements.filter((item) => Object.entries(filters).every(([key, values]) => !values.length || values.includes(item[key])) && (!search || `${item.number} ${item.description} ${item.type}`.toLowerCase().includes(search)));
+      const releases = [...new Set(projectRequirements.map((item) => item.release).filter(Boolean))].sort((first, second) => first.localeCompare(second, 'ru', { numeric: true }));
+      return sendJson(response, 200, { requirements, releases });
     }
     const requirementMatch = path.match(/^\/api\/requirements\/([^/]+)$/);
     if (path === '/api/requirements' && request.method === 'POST') {
