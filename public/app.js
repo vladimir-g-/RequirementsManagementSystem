@@ -189,25 +189,34 @@ function openModal(item = null) {
   const modal = document.querySelector('#modal'); const close = () => modal.remove(); document.querySelector('#close').onclick = close; document.querySelector('#cancel').onclick = close; document.querySelector('input[name="number"]').readOnly = true;
   const editor = document.querySelector('#details-markdown'); const preview = document.querySelector('#markdown-preview'); const updatePreview = () => { preview.innerHTML = markdownToHtml(editor.value); };
   const previewToggle = document.querySelector('#preview-toggle');
+  const modeSwitch = document.createElement('div');
+  modeSwitch.className = 'mode-switch';
+  modeSwitch.setAttribute('role', 'tablist');
+  modeSwitch.setAttribute('aria-label', 'Режим описания');
+  modeSwitch.innerHTML = '<button type="button" class="mode-switch-button" data-mode="markdown" role="tab">Markdown</button><button type="button" class="mode-switch-button" data-mode="preview" role="tab">Предпросмотр</button>';
+  previewToggle.replaceWith(modeSwitch);
+  const modeButtons = [...modeSwitch.querySelectorAll('[data-mode]')];
   const setPreviewMode = (isPreviewVisible) => {
     preview.classList.toggle('visible', isPreviewVisible);
     editor.classList.toggle('hidden', isPreviewVisible);
-    previewToggle.textContent = isPreviewVisible ? 'Редактирование' : 'Предпросмотр';
-    previewToggle.title = isPreviewVisible ? 'Редактирование' : 'Предпросмотр';
+    modeButtons.forEach((button) => {
+      const active = button.dataset.mode === (isPreviewVisible ? 'preview' : 'markdown');
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-selected', String(active));
+    });
   };
   editor.oninput = updatePreview;
-  editor.onfocus = () => setPreviewMode(false);
-  editor.onblur = () => setPreviewMode(true);
-  preview.onclick = () => { setPreviewMode(false); editor.focus(); };
   updatePreview();
   setPreviewMode(true);
   document.querySelectorAll('[data-mark]').forEach((button) => { button.onclick = () => { const marks = { bold: ['**', '**'], italic: ['_', '_'], heading: ['## ', ''], bullet: ['- ', ''], number: ['1. ', ''], code: ['`', '`'] }; wrapSelection(editor, ...marks[button.dataset.mark]); editor.focus(); }; });
-  previewToggle.onmousedown = (event) => event.preventDefault();
-  previewToggle.onclick = () => {
-    const isPreviewVisible = !preview.classList.contains('visible');
-    setPreviewMode(isPreviewVisible);
-    if (!isPreviewVisible) editor.focus();
-  };
+  modeButtons.forEach((button) => {
+    button.onmousedown = (event) => event.preventDefault();
+    button.onclick = () => {
+      const isPreviewVisible = button.dataset.mode === 'preview';
+      setPreviewMode(isPreviewVisible);
+      if (!isPreviewVisible) editor.focus();
+    };
+  });
   document.querySelector('#requirement-form').onsubmit = async (event) => { event.preventDefault(); const body = Object.fromEntries(new FormData(event.currentTarget)); body.projectId = item?.projectId || state.filters.projectId; try { await api(item ? `/api/requirements/${item.id}` : '/api/requirements', { method: item ? 'PUT' : 'POST', body: JSON.stringify(body) }); close(); await refresh(); } catch (error) { document.querySelector('#form-error').textContent = error.message; } };
 }
 async function deleteRequirement(id) { if (!confirm('Удалить это требование?')) return; await api(`/api/requirements/${id}`, { method: 'DELETE' }); await refresh(); }
