@@ -1,3 +1,6 @@
+import { api } from './modules/api.js';
+import { loadConfig as fetchConfig } from './modules/config.js';
+
 const app = document.querySelector('#app');
 const state = { user: null, projects: [], requirements: [], releases: [], filters: { projectId: '', search: '', type: [], priority: [], status: [], complexity: [], release: [] }, sort: { key: null, direction: 0 } };
 let statuses = [];
@@ -7,12 +10,6 @@ let complexities = [];
 let sortOrders = {};
 let filtersDirty = false;
 
-async function api(path, options = {}) {
-  const response = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...options });
-  const payload = response.status === 204 ? {} : await response.json();
-  if (!response.ok) throw new Error(payload.error || 'Ошибка запроса');
-  return payload;
-}
 function esc(value = '') { return String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char])); }
 function optionList(values, selected) { return values.map((value) => `<option ${value === selected ? 'selected' : ''}>${esc(value)}</option>`).join(''); }
 function multiOptionList(values, selected) { return values.map((value) => `<option value="${esc(value)}" ${selected.includes(value) ? 'selected' : ''}>${esc(value)}</option>`).join(''); }
@@ -36,6 +33,7 @@ document.addEventListener('click', (event) => {
   }
 });
 function badge(value) { const cls = value === 'Готово' ? 'done' : value === 'Критическая' || value === 'Высокая' ? 'high' : ''; return `<span class="badge ${cls}">${esc(value)}</span>`; }
+function can(action) { return state.user?.role === 'Администратор' || Boolean(state.user?.permissions?.[action]); }
 function sortRequirements() {
   if (!state.sort.key || !state.sort.direction) return;
   const key = state.sort.key;
@@ -54,11 +52,9 @@ function sortRequirements() {
   });
 }
 function markdownToHtml(markdown = '') {
-  let html = esc(markdown).replace(/^### (.+)$/gm, '<h4>$1</h4>').replace(/^## (.+)$/gm, '<h3>$1</h3>').replace(/^# (.+)$/gm, '<h2>$1</h2>');
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/__(.+?)__/g, '<strong>$1</strong>').replace(/\*(.+?)\*/g, '<em>$1</em>').replace(/_(.+?)_/g, '<em>$1</em>').replace(/`([^`]+)`/g, '<code>$1</code>');
-  html = html.replace(/^[-*] (.+)$/gm, '<li>$1</li>').replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>');
-  html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>').replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>').replace(/<\/li><br><li>/g, '</li><li>');
-  return html ? `<p>${html}</p>`.replace(/<p>(<h[234]>)/g, '$1').replace(/(<\/h[234]>)<\/p>/g, '$1') : '<p class="muted">Предпросмотр появится здесь</p>';
+  if (!markdown.trim()) return '<p class="muted">Предпросмотр появится здесь</p>';
+  const rawHtml = window.marked.parse(markdown, { breaks: true, gfm: true });
+  return window.DOMPurify.sanitize(rawHtml);
 }
 function wrapSelection(textarea, before, after = before) {
   const start = textarea.selectionStart; const end = textarea.selectionEnd; const selected = textarea.value.slice(start, end) || 'текст';
@@ -69,17 +65,15 @@ function renderLogin(error = '') {
   document.querySelector('#login-form').addEventListener('submit', async (event) => { event.preventDefault(); const form = new FormData(event.currentTarget); try { const result = await api('/api/auth/login', { method: 'POST', body: JSON.stringify(Object.fromEntries(form)) }); state.user = result.user; await loadApp(); } catch (loginError) { renderLogin(loginError.message); } });
 }
 async function loadConfig() {
-  const files = ['statuses', 'priorities', 'complexities', 'types', 'projects'];
-  const config = await Promise.all(files.map(async (name) => [name, await fetch(`/config/${name}.json`).then((response) => response.json())]));
-  const values = Object.fromEntries(config);
+  const values = await fetchConfig(api);
   statuses = values.statuses;
   types = values.types;
   priorities = values.priorities;
   complexities = values.complexities;
   sortOrders = { priority: values.priorities.slice().reverse() };
-  state.projects = values.projects;
+  state.projects = (await api('/api/projects')).projects;
 }
-async function loadApp() { await loadConfig(); state.filters.projectId = state.filters.projectId || state.projects[0]?.id || ''; await loadRequirements(); renderApp(); }
+async function loadApp() { await loadConfig(); if (!state.projects.some((project) => project.id === state.filters.projectId)) state.filters.projectId = state.projects[0]?.id || ''; await loadRequirements(); renderApp(); }
 async function loadRequirements() {
   const params = new URLSearchParams();
   Object.entries(state.filters).forEach(([key, value]) => Array.isArray(value) ? value.forEach((item) => params.append(key, item)) : value && params.set(key, value));
@@ -89,13 +83,15 @@ async function loadRequirements() {
   sortRequirements();
 }
 function userMenu() {
-  return `<details class="user-menu"><summary><span class="avatar">${esc((state.user.name || 'A')[0])}</span><span>${esc(state.user.name)}</span><span class="menu-chevron" aria-hidden="true">⌄</span></summary><div class="user-menu-list"><button type="button" id="profile-link">Профиль</button><button type="button" id="logout">Выйти</button></div></details>`;
+  const adminLink = state.user.role === 'Администратор' ? '<button type="button" id="users-link">Пользователи и права</button>' : '';
+  return `<details class="user-menu"><summary><span class="avatar">${esc((state.user.name || 'A')[0])}</span><span>${esc(state.user.name)}</span><span class="menu-chevron" aria-hidden="true">⌄</span></summary><div class="user-menu-list"><button type="button" id="profile-link">Профиль</button>${adminLink}<button type="button" id="logout">Выйти</button></div></details>`;
 }
 function projectPicker() {
   return `<div class="topbar-project field"><label for="project">Активный проект</label><select id="project">${state.projects.map((item) => `<option value="${item.id}" ${item.id === state.filters.projectId ? 'selected' : ''}>${esc(item.code)} · ${esc(item.name)}</option>`).join('')}</select></div>`;
 }
 function bindUserMenu() {
   document.querySelector('#profile-link').onclick = () => renderProfile();
+  document.querySelector('#users-link')?.addEventListener('click', () => renderUsers());
   document.querySelector('#logout').onclick = async () => { await api('/api/auth/logout', { method: 'POST' }); state.user = null; renderLogin(); };
 }
 function bindProjectPicker() {
@@ -107,8 +103,28 @@ function renderProfile() {
   bindProjectPicker();
   document.querySelector('#back-to-requirements').onclick = () => renderApp();
 }
+function renderAccessDenied(message = 'У вашей учетной записи нет права просматривать требования.') {
+  app.innerHTML = `<div class="shell"><header class="topbar"><div class="topbar-start"><div class="brand">RMS<span>.</span></div>${projectPicker()}</div>${userMenu()}</header><main class="content"><section class="access-denied"><p class="eyebrow">Доступ ограничен</p><h1>Недостаточно прав</h1><p>${esc(message)}</p></section></main></div>`;
+  bindUserMenu(); bindProjectPicker();
+}
+async function renderUsers() {
+  const result = await api('/api/users');
+  app.innerHTML = `<div class="shell"><header class="topbar"><div class="topbar-start"><div class="brand">RMS<span>.</span></div>${projectPicker()}</div>${userMenu()}</header><main class="content"><div class="profile-heading"><div><p class="eyebrow">Администрирование</p><h1>Пользователи и права</h1></div><button class="primary" id="add-user">+ Новый пользователь</button></div><div class="table-wrap"><table class="users-table"><thead><tr><th>Имя</th><th>Логин</th><th>Роль</th><th>Проекты</th><th>Права</th><th></th></tr></thead><tbody>${result.users.map((item) => `<tr><td class="description">${esc(item.name)}</td><td>${esc(item.username)}</td><td><span class="badge">${esc(item.role)}</span></td><td>${item.role === 'Администратор' ? 'Все проекты' : item.projectIds.map((id) => esc(state.projects.find((project) => project.id === id)?.code || id)).join(', ') || 'Не назначены'}</td><td>${item.role === 'Администратор' ? 'Полный доступ' : Object.entries(item.permissions).filter(([, enabled]) => enabled).map(([name]) => ({ create: 'Создание', read: 'Просмотр', update: 'Изменение', delete: 'Удаление' }[name])).join(', ') || 'Нет прав'}</td><td><div class="actions"><button class="icon-button user-edit" data-id="${item.id}" title="Редактировать">✎</button><button class="icon-button delete user-delete" data-id="${item.id}" title="Удалить">×</button></div></td></tr>`).join('')}</tbody></table></div></main></div>`;
+  bindUserMenu(); bindProjectPicker();
+  document.querySelector('#add-user').onclick = () => openUserModal();
+  document.querySelectorAll('.user-edit').forEach((button) => { button.onclick = () => openUserModal(result.users.find((item) => item.id === button.dataset.id)); });
+  document.querySelectorAll('.user-delete').forEach((button) => { button.onclick = () => deleteUser(button.dataset.id); });
+}
+function openUserModal(item = null) {
+  const permissionLabels = { create: 'Создание требований', read: 'Просмотр требований', update: 'Изменение требований', delete: 'Удаление требований' };
+  document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop" id="user-modal"><form class="modal user-modal" id="user-form"><div class="modal-header"><div><p class="eyebrow">${item ? 'Редактирование' : 'Новая запись'}</p><h2>${item ? 'Изменить пользователя' : 'Добавить пользователя'}</h2></div><button type="button" class="close" id="user-close">×</button></div><div class="form-grid"><div class="field"><label>Имя *</label><input name="name" required value="${esc(item?.name || '')}"></div><div class="field"><label>Логин *</label><input name="username" required value="${esc(item?.username || '')}"></div><div class="field"><label>Роль *</label><select name="role" id="user-role"><option ${item?.role === 'Администратор' ? 'selected' : ''}>Администратор</option><option ${item?.role !== 'Администратор' ? 'selected' : ''}>Пользователь</option></select></div><div class="field"><label>Пароль ${item ? '' : '*'}</label><input name="password" type="password" ${item ? '' : 'required'} placeholder="${item ? 'Оставьте пустым без изменений' : 'Введите пароль'}"></div><div class="field wide user-access-section"><label>Доступные проекты</label><div class="check-grid">${state.projects.map((project) => `<label class="permission-option"><input type="checkbox" name="projectIds" value="${project.id}" ${item?.projectIds.includes(project.id) ? 'checked' : ''}><span>${esc(project.code)} · ${esc(project.name)}</span></label>`).join('')}</div></div><div class="field wide user-access-section"><label>Права на требования</label><div class="check-grid">${Object.entries(permissionLabels).map(([key, label]) => `<label class="permission-option"><input type="checkbox" name="permission-${key}" ${item?.permissions[key] ? 'checked' : ''}><span>${label}</span></label>`).join('')}</div></div></div><p class="error" id="user-form-error"></p><div class="modal-actions"><button type="button" class="cancel" id="user-cancel">Отмена</button><button class="primary">${item ? 'Сохранить изменения' : 'Создать пользователя'}</button></div></form></div>`);
+  const modal = document.querySelector('#user-modal'); const close = () => modal.remove(); document.querySelector('#user-close').onclick = close; document.querySelector('#user-cancel').onclick = close;
+  const role = document.querySelector('#user-role'); const accessSections = document.querySelectorAll('.user-access-section'); const updateAccessVisibility = () => accessSections.forEach((section) => { section.hidden = role.value === 'Администратор'; }); role.onchange = updateAccessVisibility; updateAccessVisibility();
+  document.querySelector('#user-form').onsubmit = async (event) => { event.preventDefault(); const form = new FormData(event.currentTarget); const body = { name: form.get('name'), username: form.get('username'), role: form.get('role'), password: form.get('password'), projectIds: form.getAll('projectIds'), permissions: Object.fromEntries(Object.keys(permissionLabels).map((key) => [key, form.has(`permission-${key}`)])) }; try { await api(item ? `/api/users/${item.id}` : '/api/users', { method: item ? 'PUT' : 'POST', body: JSON.stringify(body) }); close(); await renderUsers(); } catch (error) { document.querySelector('#user-form-error').textContent = error.message; } };
+}
+async function deleteUser(id) { if (!confirm('Удалить пользователя?')) return; try { await api(`/api/users/${id}`, { method: 'DELETE' }); await renderUsers(); } catch (error) { alert(error.message); } }
 function renderApp() {
-  app.innerHTML = `<div class="shell"><header class="topbar"><div class="topbar-start"><div class="brand">RMS<span>.</span></div>${projectPicker()}</div>${userMenu()}</header><main class="content"><div class="heading"><div><h1>Требования</h1></div></div><div class="toolbar"><div class="field project-field"><label for="search">Поиск</label><input id="search" placeholder="Номер, описание или тип" value="${esc(state.filters.search)}"></div>${multiFilter('type', 'Тип', types)}${multiFilter('priority', 'Важность', priorities)}${multiFilter('complexity', 'Сложность', complexities)}${multiFilter('status', 'Статус', statuses)}${multiFilter('release', 'Релиз', state.releases)}<button class="clear" id="clear">Сбросить</button><button class="primary" id="add">+ Новое требование</button></div><div class="table-wrap"><table><thead><tr><th>Номер</th><th>Краткое описание</th><th>Тип</th><th>Важность</th><th>Сложность</th><th>Статус</th><th>Релиз</th><th></th></tr></thead><tbody>${state.requirements.length ? state.requirements.map((item) => `<tr><td><button class="requirement-number edit" data-id="${item.id}" title="Редактировать требование">${esc(item.number)}</button></td><td class="description">${esc(item.description)}</td><td>${esc(item.type)}</td><td>${badge(item.priority)}</td><td>${badge(item.complexity)}</td><td>${badge(item.status)}</td><td>${esc(item.release)}</td><td><div class="actions"><button class="icon-button edit" data-id="${item.id}" title="Редактировать">✎</button><button class="icon-button delete" data-id="${item.id}" title="Удалить">×</button></div></td></tr>`).join('') : `<tr><td colspan="8" class="empty">В проекте пока нет требований</td></tr>`}</tbody></table></div></main></div>`;
+  app.innerHTML = `<div class="shell"><header class="topbar"><div class="topbar-start"><div class="brand">RMS<span>.</span></div>${projectPicker()}</div>${userMenu()}</header><main class="content"><div class="heading"><div><h1>Требования</h1></div></div><div class="toolbar"><div class="field project-field"><label for="search">Поиск</label><input id="search" placeholder="Номер, описание или тип" value="${esc(state.filters.search)}"></div>${multiFilter('type', 'Тип', types)}${multiFilter('priority', 'Важность', priorities)}${multiFilter('complexity', 'Сложность', complexities)}${multiFilter('status', 'Статус', statuses)}${multiFilter('release', 'Релиз', state.releases)}<button class="clear" id="clear">Сбросить</button>${can('create') ? '<button class="primary" id="add">+ Новое требование</button>' : ''}</div><div class="table-wrap"><table><thead><tr><th>Номер</th><th>Краткое описание</th><th>Тип</th><th>Важность</th><th>Сложность</th><th>Статус</th><th>Релиз</th><th></th></tr></thead><tbody>${state.requirements.length ? state.requirements.map((item) => `<tr><td>${can('update') ? `<button class="requirement-number edit" data-id="${item.id}" title="Редактировать требование">${esc(item.number)}</button>` : esc(item.number)}</td><td class="description">${esc(item.description)}</td><td>${esc(item.type)}</td><td>${badge(item.priority)}</td><td>${badge(item.complexity)}</td><td>${badge(item.status)}</td><td>${esc(item.release)}</td><td><div class="actions">${can('update') ? `<button class="icon-button edit" data-id="${item.id}" title="Редактировать">✎</button>` : ''}${can('delete') ? `<button class="icon-button delete" data-id="${item.id}" title="Удалить">×</button>` : ''}</div></td></tr>`).join('') : `<tr><td colspan="8" class="empty">В проекте пока нет требований</td></tr>`}</tbody></table></div></main></div>`;
   bindUserMenu();
   bindProjectPicker();
   document.querySelectorAll('[data-filter]').forEach((checkbox) => {
@@ -169,4 +185,4 @@ function openModal(item = null) {
 }
 async function deleteRequirement(id) { if (!confirm('Удалить это требование?')) return; await api(`/api/requirements/${id}`, { method: 'DELETE' }); await refresh(); }
 
-(async () => { try { const result = await api('/api/auth/me'); if (result.user) { state.user = result.user; await loadApp(); } else renderLogin(); } catch { renderLogin('Сервер недоступен'); } })();
+(async () => { try { const result = await api('/api/auth/me'); if (result.user) { state.user = result.user; await loadApp(); } else renderLogin(); } catch (error) { if (error.status === 403) renderAccessDenied(error.message); else renderLogin('Сервер недоступен'); } })();
