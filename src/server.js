@@ -71,6 +71,22 @@ export function createApp({ port, publicDir, store, config, auth }) {
     return { ...existing, username: String(input.username || existing.username || '').trim(), name: String(input.name || existing.name || '').trim(), role: roles.includes(input.role) ? input.role : existing.role || 'Пользователь', projectIds: Array.isArray(input.projectIds) ? input.projectIds : existing.projectIds || [], permissions };
   }
 
+  function prefixFor(projectId, type, configs) {
+    return store.data.requirementPrefixes.find((item) => item.projectId === projectId && item.type === type)?.prefix || configs.projects.find((project) => project.id === projectId)?.code || 'REQ';
+  }
+
+  function nextRequirementNumber(projectId, type, configs) {
+    const prefix = prefixFor(projectId, type, configs);
+    const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pattern = new RegExp(`^${escapedPrefix}-(\\d+)$`, 'i');
+    const nextSequence = store.data.requirements.reduce((maximum, requirement) => {
+      if (requirement.projectId !== projectId || requirement.type !== type) return maximum;
+      const match = requirement.number?.match(pattern);
+      return match ? Math.max(maximum, Number(match[1])) : maximum;
+    }, 0) + 1;
+    return `${prefix}-${String(nextSequence).padStart(3, '0')}`;
+  }
+
   const server = createServer(async (request, response) => {
     const url = new URL(request.url, `http://${request.headers.host}`);
     const path = url.pathname;
@@ -95,6 +111,21 @@ export function createApp({ port, publicDir, store, config, auth }) {
 
       if (path === '/api/config' && request.method === 'GET') return sendJson(response, 200, configs);
       if (path === '/api/projects' && request.method === 'GET') return sendJson(response, 200, { projects: visibleProjects(user, configs.projects) });
+      if (path === '/api/requirement-prefixes' && request.method === 'GET') {
+        if (!requireAdmin(user, response)) return;
+        const prefixes = configs.projects.flatMap((project) => configs.types.map((type) => ({ projectId: project.id, type, prefix: prefixFor(project.id, type, configs) })));
+        return sendJson(response, 200, { prefixes });
+      }
+      if (path === '/api/requirement-prefixes' && request.method === 'PUT') {
+        if (!requireAdmin(user, response)) return;
+        const input = await readBody(request);
+        if (!Array.isArray(input.prefixes)) return sendJson(response, 400, { error: 'Ожидается список префиксов' });
+        const prefixes = input.prefixes.map((item) => ({ projectId: item.projectId, type: item.type, prefix: String(item.prefix || '').trim() })).filter((item) => item.prefix);
+        const valid = prefixes.every((item) => configs.projects.some((project) => project.id === item.projectId) && configs.types.includes(item.type) && /^[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё0-9_-]{0,19}$/.test(item.prefix));
+        const unique = new Set(prefixes.map((item) => `${item.projectId}:${item.type}`)).size === prefixes.length;
+        if (!valid || !unique) return sendJson(response, 400, { error: 'Проверьте проекты, типы и формат префиксов' });
+        store.data.requirementPrefixes = prefixes; store.save(); return sendJson(response, 200, { prefixes });
+      }
 
       if (path === '/api/users' && request.method === 'GET') {
         if (!requireAdmin(user, response)) return;
@@ -142,7 +173,7 @@ export function createApp({ port, publicDir, store, config, auth }) {
         if (!auth.can(user, 'create', input.projectId)) return sendJson(response, 403, { error: 'Нет права создавать требования в этом проекте' });
         if (!input.description || !validValue('types', input.type, configs) || !validValue('priorities', input.priority, configs) || !validValue('statuses', input.status, configs)) return sendJson(response, 400, { error: 'Заполните обязательные поля корректными значениями' });
         const project = configs.projects.find((item) => item.id === input.projectId);
-        const requirement = { id: randomUUID(), number: input.number || `${project.code}-${String(store.data.requirements.filter((item) => item.projectId === project.id).length + 1).padStart(3, '0')}`, description: input.description, detailsMarkdown: input.detailsMarkdown || '', type: input.type, priority: input.priority, complexity: input.complexity || '', status: input.status, release: input.release || '', projectId: project.id };
+        const requirement = { id: randomUUID(), number: nextRequirementNumber(project.id, input.type, configs), description: input.description, detailsMarkdown: input.detailsMarkdown || '', type: input.type, priority: input.priority, complexity: input.complexity || '', status: input.status, release: input.release || '', projectId: project.id };
         store.data.requirements.push(requirement); store.save(); return sendJson(response, 201, { requirement });
       }
       if (requirementMatch && ['PUT', 'DELETE'].includes(request.method)) {
@@ -152,7 +183,7 @@ export function createApp({ port, publicDir, store, config, auth }) {
         if (!auth.can(user, request.method === 'DELETE' ? 'delete' : 'update', requirement.projectId)) return sendJson(response, 403, { error: 'Недостаточно прав для этой операции' });
         if (request.method === 'DELETE') { store.data.requirements.splice(index, 1); store.save(); return sendJson(response, 200, { ok: true }); }
         const input = await readBody(request);
-        const updated = { ...requirement, ...input, id: requirement.id, projectId: requirement.projectId };
+        const updated = { ...requirement, ...input, id: requirement.id, number: requirement.number, projectId: requirement.projectId };
         if (!input.description || !validValue('types', input.type, configs) || !validValue('priorities', input.priority, configs) || !validValue('statuses', input.status, configs)) return sendJson(response, 400, { error: 'Заполните обязательные поля корректными значениями' });
         store.data.requirements[index] = updated; store.save(); return sendJson(response, 200, { requirement: updated });
       }

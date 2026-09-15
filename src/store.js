@@ -16,6 +16,7 @@ export function createStore(dataFile, initialData) {
     projectIds: user.projectIds || [],
     permissions: { ...defaultPermissions, ...user.permissions }
   }));
+  data.requirementPrefixes = Array.isArray(data.requirementPrefixes) ? data.requirementPrefixes : [];
 
   function save() {
     writeFileSync(dataFile, JSON.stringify(data, null, 2));

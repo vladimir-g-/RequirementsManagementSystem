@@ -102,6 +102,80 @@
       "status": "Запланировано",
       "release": "",
       "projectId": "project-beta"
+    },
+    {
+      "id": "7dcb05f0-1338-4876-b80b-c7243deefed3",
+      "number": "NFR-001",
+      "description": "Поддержка смены языка интерфейса",
+      "detailsMarkdown": "Система должна предоставлять пользователю возможность изменения языка пользовательского интерфейса. \n",
+      "type": "Нефункциональное",
+      "priority": "Средняя",
+      "complexity": "Высокая",
+      "status": "В работе",
+      "release": "",
+      "projectId": "project-alpha"
+    }
+  ],
+  "requirementPrefixes": [
+    {
+      "projectId": "project-alpha",
+      "type": "Функциональное",
+      "prefix": "FR"
+    },
+    {
+      "projectId": "project-alpha",
+      "type": "Нефункциональное",
+      "prefix": "NFR"
+    },
+    {
+      "projectId": "project-alpha",
+      "type": "Безопасность",
+      "prefix": "SEQ"
+    },
+    {
+      "projectId": "project-alpha",
+      "type": "Интеграционное",
+      "prefix": "INT"
+    },
+    {
+      "projectId": "project-alpha",
+      "type": "Сценарий использования",
+      "prefix": "UC"
+    },
+    {
+      "projectId": "project-alpha",
+      "type": "Пользовательская история",
+      "prefix": "US"
+    },
+    {
+      "projectId": "project-beta",
+      "type": "Функциональное",
+      "prefix": "FR"
+    },
+    {
+      "projectId": "project-beta",
+      "type": "Нефункциональное",
+      "prefix": "NFR"
+    },
+    {
+      "projectId": "project-beta",
+      "type": "Безопасность",
+      "prefix": "SEQ"
+    },
+    {
+      "projectId": "project-beta",
+      "type": "Интеграционное",
+      "prefix": "INT"
+    },
+    {
+      "projectId": "project-beta",
+      "type": "Сценарий использования",
+      "prefix": "UC"
+    },
+    {
+      "projectId": "project-beta",
+      "type": "Пользовательская история",
+      "prefix": "US"
     }
   ]
 }
