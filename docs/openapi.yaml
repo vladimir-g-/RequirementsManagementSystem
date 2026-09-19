@@ -1,0 +1,824 @@
+openapi: 3.0.3
+info:
+  title: Requirements Management System API
+  description: API серверной части системы управления требованиями.
+  version: 1.0.0
+  license:
+    name: Proprietary
+servers:
+  - url: http://localhost:3000
+    description: Локальный сервер
+tags:
+  - name: Auth
+    description: Аутентификация и текущая сессия
+  - name: Config
+    description: Справочники интерфейса
+  - name: Projects
+    description: Проекты, доступные пользователю
+  - name: Requirements
+    description: Требования
+  - name: Requirement prefixes
+    description: Префиксы номеров требований (только администратор)
+  - name: Users
+    description: Пользователи (только администратор)
+paths:
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Войти в систему
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Успешный вход. В ответе устанавливается cookie session.
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/SessionCookie'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/InvalidJson'
+        '401':
+          description: Неверный логин или пароль
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Завершить текущую сессию
+      operationId: logout
+      security:
+        - sessionCookie: []
+      responses:
+        '204':
+          description: Сессия завершена, cookie session очищена
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/ClearedSessionCookie'
+
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      summary: Получить текущего пользователя
+      operationId: getCurrentUser
+      responses:
+        '200':
+          description: Текущий пользователь или null, если сессия отсутствует
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user:
+                    oneOf:
+                      - $ref: '#/components/schemas/UserPublic'
+                      - type: object
+                        nullable: true
+
+  /api/config:
+    get:
+      tags: [Config]
+      summary: Получить справочники
+      operationId: getConfig
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Справочники, загруженные из конфигурации приложения
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Config'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/projects:
+    get:
+      tags: [Projects]
+      summary: Получить доступные проекты
+      operationId: listProjects
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Для администратора возвращаются все проекты, для остальных пользователей — назначенные
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [projects]
+                properties:
+                  projects:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Project'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/requirement-prefixes:
+    get:
+      tags: [Requirement prefixes]
+      summary: Получить префиксы требований
+      operationId: listRequirementPrefixes
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Префиксы для каждой пары проект–тип требования
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [prefixes]
+                properties:
+                  prefixes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RequirementPrefix'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AdminRequired'
+    put:
+      tags: [Requirement prefixes]
+      summary: Сохранить префиксы требований
+      operationId: updateRequirementPrefixes
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequirementPrefixesRequest'
+      responses:
+        '200':
+          description: Префиксы сохранены
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [prefixes]
+                properties:
+                  prefixes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RequirementPrefix'
+        '400':
+          description: Некорректный список, неизвестный проект или тип, дубликат пары или неверный формат префикса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AdminRequired'
+
+  /api/users:
+    get:
+      tags: [Users]
+      summary: Получить список пользователей
+      operationId: listUsers
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Пользователи без хешей паролей
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [users]
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UserPublic'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AdminRequired'
+    post:
+      tags: [Users]
+      summary: Создать пользователя
+      operationId: createUser
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserWrite'
+      responses:
+        '201':
+          description: Пользователь создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          description: Не заполнены обязательные поля, логин не уникален или указан неизвестный проект
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AdminRequired'
+
+  /api/users/{id}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    put:
+      tags: [Users]
+      summary: Обновить пользователя
+      operationId: updateUser
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdate'
+      responses:
+        '200':
+          description: Пользователь обновлен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          description: Некорректные или конфликтующие данные пользователя
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AdminRequired'
+        '404':
+          $ref: '#/components/responses/UserNotFound'
+    delete:
+      tags: [Users]
+      summary: Удалить пользователя
+      operationId: deleteUser
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Пользователь удален
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '400':
+          description: Нельзя удалить текущего пользователя
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AdminRequired'
+        '404':
+          $ref: '#/components/responses/UserNotFound'
+
+  /api/requirements:
+    get:
+      tags: [Requirements]
+      summary: Получить требования
+      operationId: listRequirements
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectIdQuery'
+        - $ref: '#/components/parameters/SearchQuery'
+        - $ref: '#/components/parameters/TypeQuery'
+        - $ref: '#/components/parameters/PriorityQuery'
+        - $ref: '#/components/parameters/StatusQuery'
+        - $ref: '#/components/parameters/ComplexityQuery'
+        - $ref: '#/components/parameters/ReleaseQuery'
+      responses:
+        '200':
+          description: Требования и список релизов, найденных в видимой области
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: У пользователя нет права чтения требований
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      tags: [Requirements]
+      summary: Создать требование
+      operationId: createRequirement
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequirementWrite'
+      responses:
+        '201':
+          description: Требование создано; номер формируется сервером
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementResponse'
+        '400':
+          description: Не заполнены обязательные поля или переданы значения вне справочников
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Нет права создавать требования в проекте
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/requirements/{id}:
+    parameters:
+      - $ref: '#/components/parameters/RequirementId'
+    put:
+      tags: [Requirements]
+      summary: Обновить требование
+      operationId: updateRequirement
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequirementUpdate'
+      responses:
+        '200':
+          description: Требование обновлено; id, number и projectId сохраняются сервером
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementResponse'
+        '400':
+          description: Не заполнены обязательные поля или переданы значения вне справочников
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Недостаточно прав для операции
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/RequirementNotFound'
+    delete:
+      tags: [Requirements]
+      summary: Удалить требование
+      operationId: deleteRequirement
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Требование удалено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Недостаточно прав для удаления
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/RequirementNotFound'
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: session
+      description: HttpOnly cookie, устанавливаемая при успешном входе.
+  headers:
+    SessionCookie:
+      description: Сессионная cookie
+      schema:
+        type: string
+        example: session=0123456789abcdef; HttpOnly; Path=/; SameSite=Lax
+    ClearedSessionCookie:
+      description: Очищенная сессионная cookie
+      schema:
+        type: string
+        example: session=; HttpOnly; Path=/; Max-Age=0
+  parameters:
+    UserId:
+      name: id
+      in: path
+      required: true
+      description: Идентификатор пользователя
+      schema:
+        type: string
+    RequirementId:
+      name: id
+      in: path
+      required: true
+      description: Идентификатор требования
+      schema:
+        type: string
+    ProjectIdQuery:
+      name: projectId
+      in: query
+      description: Ограничить выборку проектом
+      schema:
+        type: string
+    SearchQuery:
+      name: search
+      in: query
+      description: Поиск по номеру, описанию и типу требования
+      schema:
+        type: string
+    TypeQuery:
+      name: type
+      in: query
+      style: form
+      explode: true
+      description: Фильтр по типу; параметр можно передать несколько раз
+      schema:
+        type: array
+        items:
+          $ref: '#/components/schemas/RequirementType'
+    PriorityQuery:
+      name: priority
+      in: query
+      style: form
+      explode: true
+      description: Фильтр по приоритету; параметр можно передать несколько раз
+      schema:
+        type: array
+        items:
+          $ref: '#/components/schemas/Priority'
+    StatusQuery:
+      name: status
+      in: query
+      style: form
+      explode: true
+      description: Фильтр по статусу; параметр можно передать несколько раз
+      schema:
+        type: array
+        items:
+          $ref: '#/components/schemas/Status'
+    ComplexityQuery:
+      name: complexity
+      in: query
+      style: form
+      explode: true
+      description: Фильтр по сложности; параметр можно передать несколько раз
+      schema:
+        type: array
+        items:
+          $ref: '#/components/schemas/Complexity'
+    ReleaseQuery:
+      name: release
+      in: query
+      style: form
+      explode: true
+      description: Фильтр по релизу; параметр можно передать несколько раз
+      schema:
+        type: array
+        items:
+          type: string
+  responses:
+    InvalidJson:
+      description: Некорректный JSON в теле запроса
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Требуется авторизация
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    AdminRequired:
+      description: Требуются права администратора
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    UserNotFound:
+      description: Пользователь не найден
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RequirementNotFound:
+      description: Требование не найдено
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+      additionalProperties: false
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          format: password
+      additionalProperties: false
+    PermissionSet:
+      type: object
+      required: [create, read, update, delete]
+      properties:
+        create:
+          type: boolean
+        read:
+          type: boolean
+        update:
+          type: boolean
+        delete:
+          type: boolean
+      additionalProperties: false
+    UserPublic:
+      type: object
+      required: [id, username, name, role, projectIds, permissions]
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        name:
+          type: string
+        role:
+          $ref: '#/components/schemas/Role'
+        projectIds:
+          type: array
+          items:
+            type: string
+        permissions:
+          $ref: '#/components/schemas/PermissionSet'
+      additionalProperties: false
+    UserWrite:
+      type: object
+      required: [username, name, password]
+      properties:
+        username:
+          type: string
+        name:
+          type: string
+        role:
+          $ref: '#/components/schemas/Role'
+        password:
+          type: string
+          format: password
+        projectIds:
+          type: array
+          items:
+            type: string
+        permissions:
+          $ref: '#/components/schemas/PermissionSet'
+      additionalProperties: false
+    UserUpdate:
+      type: object
+      description: Все поля необязательны. Отсутствующие username, name, role и projectIds сохраняются; если permissions не передан, сервер сбрасывает все права в false.
+      properties:
+        username:
+          type: string
+        name:
+          type: string
+        role:
+          $ref: '#/components/schemas/Role'
+        password:
+          type: string
+          format: password
+        projectIds:
+          type: array
+          items:
+            type: string
+        permissions:
+          $ref: '#/components/schemas/PermissionSet'
+      additionalProperties: false
+    Role:
+      type: string
+      enum: [Администратор, Пользователь]
+    Project:
+      type: object
+      required: [id, name, code]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        code:
+          type: string
+      additionalProperties: false
+    RequirementPrefix:
+      type: object
+      required: [projectId, type, prefix]
+      properties:
+        projectId:
+          type: string
+        type:
+          $ref: '#/components/schemas/RequirementType'
+        prefix:
+          type: string
+          pattern: '^[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё0-9_-]{0,19}$'
+          description: От 1 до 20 символов, начинается с буквы
+      additionalProperties: false
+    Requirement:
+      type: object
+      required: [id, number, description, detailsMarkdown, type, priority, complexity, status, release, projectId]
+      properties:
+        id:
+          type: string
+        number:
+          type: string
+          readOnly: true
+          description: Формируется сервером в формате PREFIX-001
+        description:
+          type: string
+        detailsMarkdown:
+          type: string
+        type:
+          $ref: '#/components/schemas/RequirementType'
+        priority:
+          $ref: '#/components/schemas/Priority'
+        complexity:
+          type: string
+          description: Пустая строка допускается сервером
+          enum: [Низкая, Средняя, Высокая, '']
+        status:
+          $ref: '#/components/schemas/Status'
+        release:
+          type: string
+          description: Может быть пустой строкой
+        projectId:
+          type: string
+          readOnly: true
+      additionalProperties: false
+    RequirementWrite:
+      type: object
+      required: [projectId, description, type, priority, status]
+      properties:
+        projectId:
+          type: string
+        description:
+          type: string
+        detailsMarkdown:
+          type: string
+          default: ''
+        type:
+          $ref: '#/components/schemas/RequirementType'
+        priority:
+          $ref: '#/components/schemas/Priority'
+        complexity:
+          type: string
+          enum: [Низкая, Средняя, Высокая, '']
+          default: ''
+        status:
+          $ref: '#/components/schemas/Status'
+        release:
+          type: string
+          default: ''
+      additionalProperties: false
+    RequirementUpdate:
+      type: object
+      description: Поля id, number и projectId игнорируются и сохраняются из существующего требования.
+      required: [description, type, priority, status]
+      properties:
+        description:
+          type: string
+        detailsMarkdown:
+          type: string
+        type:
+          $ref: '#/components/schemas/RequirementType'
+        priority:
+          $ref: '#/components/schemas/Priority'
+        complexity:
+          type: string
+          enum: [Низкая, Средняя, Высокая, '']
+        status:
+          $ref: '#/components/schemas/Status'
+        release:
+          type: string
+      additionalProperties: false
+    RequirementsResponse:
+      type: object
+      required: [requirements, releases]
+      properties:
+        requirements:
+          type: array
+          items:
+            $ref: '#/components/schemas/Requirement'
+        releases:
+          type: array
+          items:
+            type: string
+    RequirementResponse:
+      type: object
+      required: [requirement]
+      properties:
+        requirement:
+          $ref: '#/components/schemas/Requirement'
+    UserResponse:
+      type: object
+      required: [user]
+      properties:
+        user:
+          $ref: '#/components/schemas/UserPublic'
+    RequirementPrefixesRequest:
+      type: object
+      required: [prefixes]
+      properties:
+        prefixes:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequirementPrefix'
+      additionalProperties: false
+    OkResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+          enum: [true]
+    Config:
+      type: object
+      required: [statuses, priorities, complexities, types, projects]
+      properties:
+        statuses:
+          type: array
+          items:
+            $ref: '#/components/schemas/Status'
+        priorities:
+          type: array
+          items:
+            $ref: '#/components/schemas/Priority'
+        complexities:
+          type: array
+          items:
+            $ref: '#/components/schemas/Complexity'
+        types:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequirementType'
+        projects:
+          type: array
+          items:
+            $ref: '#/components/schemas/Project'
+    RequirementType:
+      type: string
+      enum: [Функциональное, Нефункциональное, Безопасность, Интеграционное, Сценарий использования, Пользовательская история]
+    Status:
+      type: string
+      enum: [Черновик, В работе, На проверке, На согласовании, Согласовано, Отменено]
+    Priority:
+      type: string
+      enum: [Критическая, Высокая, Средняя, Низкая]
+    Complexity:
+      type: string
+      enum: [Низкая, Средняя, Высокая]
