@@ -11,7 +11,8 @@ const dataFile = join(rootDir, 'data', 'database.json');
 const publicDir = join(rootDir, 'public');
 const initialData = {
   users: [{ id: 'user-admin', username: 'admin', passwordHash: '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', name: 'Администратор', role: 'Администратор', projectIds: [], permissions: { create: true, read: true, update: true, delete: true } }],
-  requirements: []
+  requirements: [],
+  groups: []
 };
 
 const store = createStore(dataFile, initialData);

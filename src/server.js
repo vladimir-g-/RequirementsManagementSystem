@@ -66,6 +66,24 @@ export function createApp({ port, publicDir, store, config, auth }) {
     return user.role === 'Администратор' ? requirements : user.permissions.read ? requirements.filter((item) => user.projectIds.includes(item.projectId)) : [];
   }
 
+  function visibleGroups(user, groups) {
+    return user.role === 'Администратор' ? groups : user.permissions.read ? groups.filter((item) => user.projectIds.includes(item.projectId)) : [];
+  }
+
+  function groupForProject(groupId, projectId) {
+    if (!groupId) return null;
+    return store.data.groups.find((group) => group.id === groupId && group.projectId === projectId) || null;
+  }
+
+  function hasGroupDescendant(groupId, candidateParentId) {
+    let current = candidateParentId;
+    while (current) {
+      if (current === groupId) return true;
+      current = store.data.groups.find((group) => group.id === current)?.parentId || null;
+    }
+    return false;
+  }
+
   function normalizeUser(input, existing = {}) {
     const permissions = Object.fromEntries(permissionNames.map((name) => [name, Boolean(input.permissions?.[name])]));
     return { ...existing, username: String(input.username || existing.username || '').trim(), name: String(input.name || existing.name || '').trim(), role: roles.includes(input.role) ? input.role : existing.role || 'Пользователь', projectIds: Array.isArray(input.projectIds) ? input.projectIds : existing.projectIds || [], permissions };
@@ -111,6 +129,41 @@ export function createApp({ port, publicDir, store, config, auth }) {
 
       if (path === '/api/config' && request.method === 'GET') return sendJson(response, 200, configs);
       if (path === '/api/projects' && request.method === 'GET') return sendJson(response, 200, { projects: visibleProjects(user, configs.projects) });
+      if (path === '/api/groups' && request.method === 'GET') {
+        if (!user.permissions.read) return sendJson(response, 403, { error: 'Нет права просматривать группы' });
+        const projectId = url.searchParams.get('projectId');
+        const groups = visibleGroups(user, store.data.groups).filter((group) => !projectId || group.projectId === projectId);
+        return sendJson(response, 200, { groups });
+      }
+      if (path === '/api/groups' && request.method === 'POST') {
+        const input = await readBody(request);
+        if (!auth.can(user, 'create', input.projectId)) return sendJson(response, 403, { error: 'Нет права создавать группы в этом проекте' });
+        if (!configs.projects.some((project) => project.id === input.projectId)) return sendJson(response, 400, { error: 'Указан неизвестный проект' });
+        const name = String(input.name || '').trim();
+        const parentId = input.parentId || null;
+        if (!name || name.length > 200) return sendJson(response, 400, { error: 'Укажите название группы длиной до 200 символов' });
+        if (parentId && !groupForProject(parentId, input.projectId)) return sendJson(response, 400, { error: 'Указана неизвестная родительская группа' });
+        const group = { id: randomUUID(), name, projectId: input.projectId, parentId };
+        store.data.groups.push(group); store.save(); return sendJson(response, 201, { group });
+      }
+      const groupMatch = path.match(/^\/api\/groups\/([^/]+)$/);
+      if (groupMatch && ['PUT', 'DELETE'].includes(request.method)) {
+        const index = store.data.groups.findIndex((group) => group.id === groupMatch[1]);
+        if (index < 0) return sendJson(response, 404, { error: 'Группа не найдена' });
+        const group = store.data.groups[index];
+        if (!auth.can(user, request.method === 'DELETE' ? 'delete' : 'update', group.projectId)) return sendJson(response, 403, { error: 'Недостаточно прав для этой операции' });
+        if (request.method === 'DELETE') {
+          if (store.data.groups.some((item) => item.parentId === group.id) || store.data.requirements.some((item) => item.groupId === group.id)) return sendJson(response, 409, { error: 'Сначала удалите подгруппы и отвяжите требования' });
+          store.data.groups.splice(index, 1); store.save(); return sendJson(response, 200, { ok: true });
+        }
+        const input = await readBody(request);
+        const name = String(input.name || '').trim();
+        const parentId = input.parentId || null;
+        if (!name || name.length > 200) return sendJson(response, 400, { error: 'Укажите название группы длиной до 200 символов' });
+        if (parentId && (!groupForProject(parentId, group.projectId) || parentId === group.id || hasGroupDescendant(group.id, parentId))) return sendJson(response, 400, { error: 'Некорректная родительская группа' });
+        const updated = { ...group, name, parentId };
+        store.data.groups[index] = updated; store.save(); return sendJson(response, 200, { group: updated });
+      }
       if (path === '/api/requirement-prefixes' && request.method === 'GET') {
         if (!requireAdmin(user, response)) return;
         const prefixes = configs.projects.flatMap((project) => configs.types.map((type) => ({ projectId: project.id, type, prefix: prefixFor(project.id, type, configs) })));
@@ -173,7 +226,8 @@ export function createApp({ port, publicDir, store, config, auth }) {
         if (!auth.can(user, 'create', input.projectId)) return sendJson(response, 403, { error: 'Нет права создавать требования в этом проекте' });
         if (!input.description || !validValue('types', input.type, configs) || !validValue('priorities', input.priority, configs) || !validValue('statuses', input.status, configs)) return sendJson(response, 400, { error: 'Заполните обязательные поля корректными значениями' });
         const project = configs.projects.find((item) => item.id === input.projectId);
-        const requirement = { id: randomUUID(), number: nextRequirementNumber(project.id, input.type, configs), description: input.description, detailsMarkdown: input.detailsMarkdown || '', type: input.type, priority: input.priority, complexity: input.complexity || '', status: input.status, release: input.release || '', projectId: project.id };
+        if (input.groupId && !groupForProject(input.groupId, project.id)) return sendJson(response, 400, { error: 'Указана неизвестная группа' });
+        const requirement = { id: randomUUID(), number: nextRequirementNumber(project.id, input.type, configs), description: input.description, detailsMarkdown: input.detailsMarkdown || '', type: input.type, priority: input.priority, complexity: input.complexity || '', status: input.status, release: input.release || '', projectId: project.id, groupId: input.groupId || null };
         store.data.requirements.push(requirement); store.save(); return sendJson(response, 201, { requirement });
       }
       if (requirementMatch && ['PUT', 'DELETE'].includes(request.method)) {
@@ -185,6 +239,8 @@ export function createApp({ port, publicDir, store, config, auth }) {
         const input = await readBody(request);
         const updated = { ...requirement, ...input, id: requirement.id, number: requirement.number, projectId: requirement.projectId };
         if (!input.description || !validValue('types', input.type, configs) || !validValue('priorities', input.priority, configs) || !validValue('statuses', input.status, configs)) return sendJson(response, 400, { error: 'Заполните обязательные поля корректными значениями' });
+        if (input.groupId && !groupForProject(input.groupId, requirement.projectId)) return sendJson(response, 400, { error: 'Указана неизвестная группа' });
+        updated.groupId = input.groupId || null;
         store.data.requirements[index] = updated; store.save(); return sendJson(response, 200, { requirement: updated });
       }
       return sendJson(response, 404, { error: 'Маршрут не найден' });

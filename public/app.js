@@ -2,7 +2,7 @@ import { api } from './modules/api.js';
 import { loadConfig as fetchConfig } from './modules/config.js';
 
 const app = document.querySelector('#app');
-const state = { user: null, projects: [], requirements: [], releases: [], filters: { projectId: '', search: '', type: [], priority: [], status: [], complexity: [], release: [] }, sort: { key: null, direction: 0 } };
+const state = { user: null, projects: [], requirements: [], groups: [], releases: [], selectedGroupId: '', filters: { projectId: '', search: '', type: [], priority: [], status: [], complexity: [], release: [] }, sort: { key: null, direction: 0 } };
 let statuses = [];
 let types = [];
 let priorities = [];
@@ -73,12 +73,16 @@ async function loadConfig() {
   sortOrders = { priority: values.priorities.slice().reverse() };
   state.projects = (await api('/api/projects')).projects;
 }
-async function loadApp() { await loadConfig(); if (!state.projects.some((project) => project.id === state.filters.projectId)) state.filters.projectId = state.projects[0]?.id || ''; await loadRequirements(); renderApp(); }
+async function loadGroups() {
+  state.groups = (await api(`/api/groups?projectId=${encodeURIComponent(state.filters.projectId)}`)).groups;
+  if (state.selectedGroupId && !state.groups.some((group) => group.id === state.selectedGroupId)) state.selectedGroupId = '';
+}
+async function loadApp() { await loadConfig(); if (!state.projects.some((project) => project.id === state.filters.projectId)) state.filters.projectId = state.projects[0]?.id || ''; await loadGroups(); await loadRequirements(); renderApp(); }
 async function loadRequirements() {
   const params = new URLSearchParams();
   Object.entries(state.filters).forEach(([key, value]) => Array.isArray(value) ? value.forEach((item) => params.append(key, item)) : value && params.set(key, value));
   const result = await api(`/api/requirements?${params}`);
-  state.requirements = result.requirements;
+  state.requirements = state.selectedGroupId ? result.requirements.filter((item) => item.groupId === state.selectedGroupId) : result.requirements;
   state.releases = result.releases || state.releases;
   sortRequirements();
 }
@@ -96,7 +100,7 @@ function bindUserMenu() {
   document.querySelector('#logout').onclick = async () => { await api('/api/auth/logout', { method: 'POST' }); state.user = null; renderLogin(); };
 }
 function bindProjectPicker() {
-  document.querySelector('#project').onchange = async (event) => { state.filters.projectId = event.target.value; await refresh(); };
+  document.querySelector('#project').onchange = async (event) => { state.filters.projectId = event.target.value; state.selectedGroupId = ''; await loadGroups(); await refresh(); };
 }
 function bindPrefixProjectPicker() {
   document.querySelector('#project').onchange = async (event) => { state.filters.projectId = event.target.value; await renderPrefixSettings(); };
@@ -150,10 +154,42 @@ function openUserModal(item = null) {
   document.querySelector('#user-form').onsubmit = async (event) => { event.preventDefault(); const form = new FormData(event.currentTarget); const body = { name: form.get('name'), username: form.get('username'), role: form.get('role'), password: form.get('password'), projectIds: form.getAll('projectIds'), permissions: Object.fromEntries(Object.keys(permissionLabels).map((key) => [key, form.has(`permission-${key}`)])) }; try { await api(item ? `/api/users/${item.id}` : '/api/users', { method: item ? 'PUT' : 'POST', body: JSON.stringify(body) }); close(); await renderUsers(); } catch (error) { document.querySelector('#user-form-error').textContent = error.message; } };
 }
 async function deleteUser(id) { if (!confirm('Удалить пользователя?')) return; try { await api(`/api/users/${id}`, { method: 'DELETE' }); await renderUsers(); } catch (error) { alert(error.message); } }
+function groupOptions(selected = '') {
+  const children = (parentId = null, level = 0) => state.groups.filter((group) => group.parentId === parentId).map((group) => `<option value="${esc(group.id)}" ${group.id === selected ? 'selected' : ''}>${'— '.repeat(level)}${esc(group.name)}</option>${children(group.id, level + 1)}`).join('');
+  return `<option value="">Без группы</option>${children()}`;
+}
+function groupTree(parentId = null, level = 0) {
+  return state.groups.filter((group) => group.parentId === parentId).map((group) => {
+    const children = groupTree(group.id, level + 1);
+    return `<li><div class="group-row"><button class="group-select ${state.selectedGroupId === group.id ? 'active' : ''}" data-group-id="${esc(group.id)}">${esc(group.name)}</button><span class="group-actions">${can('update') ? `<button class="icon-button group-edit" data-id="${esc(group.id)}" title="Редактировать">✎</button>` : ''}${can('delete') ? `<button class="icon-button delete group-delete" data-id="${esc(group.id)}" title="Удалить">×</button>` : ''}</span></div>${children ? `<ul>${children}</ul>` : ''}</li>`;
+  }).join('');
+}
+async function openGroupModal(item = null) {
+  document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop" id="group-modal"><form class="modal" id="group-form"><div class="modal-header"><div><p class="eyebrow">${item ? 'Редактирование' : 'Новая группа'}</p><h2>${item ? 'Изменить группу' : 'Создать группу'}</h2></div><button type="button" class="close" id="group-close">×</button></div><div class="field"><label>Название группы *</label><input name="name" required maxlength="200" value="${esc(item?.name || '')}"></div><div class="field"><label>Родительская группа</label><select name="parentId">${groupOptions(item?.parentId || '')}</select></div><p class="error" id="group-form-error"></p><div class="modal-actions"><button type="button" class="cancel" id="group-cancel">Отмена</button><button class="primary">${item ? 'Сохранить' : 'Создать группу'}</button></div></form></div>`);
+  const modal = document.querySelector('#group-modal'); const close = () => modal.remove();
+  document.querySelector('#group-close').onclick = close; document.querySelector('#group-cancel').onclick = close;
+  document.querySelector('#group-form').onsubmit = async (event) => {
+    event.preventDefault(); const form = new FormData(event.currentTarget);
+    try { await api(item ? `/api/groups/${item.id}` : '/api/groups', { method: item ? 'PUT' : 'POST', body: JSON.stringify({ name: form.get('name'), parentId: form.get('parentId') || null, projectId: state.filters.projectId }) }); close(); await loadGroups(); renderApp(); }
+    catch (error) { document.querySelector('#group-form-error').textContent = error.message; }
+  };
+}
+async function deleteGroup(id) {
+  if (!confirm('Удалить группу?')) return;
+  try { await api(`/api/groups/${id}`, { method: 'DELETE' }); state.selectedGroupId = ''; await loadGroups(); await refresh(); } catch (error) { alert(error.message); }
+}
+function bindGroups() {
+  document.querySelector('#all-groups').onclick = async () => { state.selectedGroupId = ''; await loadRequirements(); renderApp(); };
+  document.querySelector('#add-group').onclick = () => openGroupModal();
+  document.querySelectorAll('.group-select').forEach((button) => { button.onclick = async () => { state.selectedGroupId = button.dataset.groupId; await loadRequirements(); renderApp(); }; });
+  document.querySelectorAll('.group-edit').forEach((button) => { button.onclick = () => openGroupModal(state.groups.find((group) => group.id === button.dataset.id)); });
+  document.querySelectorAll('.group-delete').forEach((button) => { button.onclick = () => deleteGroup(button.dataset.id); });
+}
 function renderApp() {
-  app.innerHTML = `<div class="shell"><header class="topbar"><div class="topbar-start"><div class="brand">RMS<span>.</span></div>${projectPicker()}</div>${userMenu()}</header><main class="content"><div class="heading"><div><h1>Требования</h1></div></div><div class="toolbar"><div class="field project-field"><label for="search">Поиск</label><input id="search" placeholder="Номер, описание или тип" value="${esc(state.filters.search)}"></div>${multiFilter('type', 'Тип', types)}${multiFilter('priority', 'Важность', priorities)}${multiFilter('complexity', 'Сложность', complexities)}${multiFilter('status', 'Статус', statuses)}${multiFilter('release', 'Релиз', state.releases)}<button class="clear" id="clear">Сбросить</button>${can('create') ? '<button class="primary" id="add">+ Новое требование</button>' : ''}</div><div class="table-wrap"><table><thead><tr><th>Номер</th><th>Краткое описание</th><th>Тип</th><th>Важность</th><th>Сложность</th><th>Статус</th><th>Релиз</th><th></th></tr></thead><tbody>${state.requirements.length ? state.requirements.map((item) => `<tr><td>${can('update') ? `<button class="requirement-number edit" data-id="${item.id}" title="Редактировать требование">${esc(item.number)}</button>` : esc(item.number)}</td><td class="description">${esc(item.description)}</td><td>${esc(item.type)}</td><td>${badge(item.priority)}</td><td>${badge(item.complexity)}</td><td>${badge(item.status)}</td><td>${esc(item.release)}</td><td><div class="actions">${can('update') ? `<button class="icon-button edit" data-id="${item.id}" title="Редактировать">✎</button>` : ''}${can('delete') ? `<button class="icon-button delete" data-id="${item.id}" title="Удалить">×</button>` : ''}</div></td></tr>`).join('') : `<tr><td colspan="8" class="empty">В проекте пока нет требований</td></tr>`}</tbody></table></div></main></div>`;
+  app.innerHTML = `<div class="shell"><header class="topbar"><div class="topbar-start"><div class="brand">RMS<span>.</span></div>${projectPicker()}</div>${userMenu()}</header><main class="content"><div class="heading"><div><h1>Требования</h1><p class="page-note">Группируйте требования в иерархию без ограничения вложенности.</p></div></div><div class="toolbar"><div class="field project-field"><label for="search">Поиск</label><input id="search" placeholder="Номер, описание или тип" value="${esc(state.filters.search)}"></div>${multiFilter('type', 'Тип', types)}${multiFilter('priority', 'Важность', priorities)}${multiFilter('complexity', 'Сложность', complexities)}${multiFilter('status', 'Статус', statuses)}${multiFilter('release', 'Релиз', state.releases)}<button class="clear" id="clear">Сбросить</button>${can('create') ? '<button class="primary" id="add">+ Новое требование</button>' : ''}</div><div class="requirements-layout"><aside class="groups-panel"><div class="groups-heading"><strong>Группы</strong><div class="groups-heading-actions">${can('create') ? '<button class="link-button" id="add-group">+ Новая группа</button>' : ''}<button class="link-button" id="all-groups">Все</button></div></div><ul class="group-tree">${groupTree()}</ul>${!state.groups.length ? '<p class="muted">Групп пока нет</p>' : ''}</aside><div class="table-wrap"><table><thead><tr><th>Номер</th><th>Краткое описание</th><th>Группа</th><th>Тип</th><th>Важность</th><th>Сложность</th><th>Статус</th><th>Релиз</th><th></th></tr></thead><tbody>${state.requirements.length ? state.requirements.map((item) => `<tr><td>${can('update') ? `<button class="requirement-number edit" data-id="${item.id}" title="Редактировать требование">${esc(item.number)}</button>` : esc(item.number)}</td><td class="description">${esc(item.description)}</td><td>${esc(state.groups.find((group) => group.id === item.groupId)?.name || 'Без группы')}</td><td>${esc(item.type)}</td><td>${badge(item.priority)}</td><td>${badge(item.complexity)}</td><td>${badge(item.status)}</td><td>${esc(item.release)}</td><td><div class="actions">${can('update') ? `<button class="icon-button edit" data-id="${item.id}" title="Редактировать">✎</button>` : ''}${can('delete') ? `<button class="icon-button delete" data-id="${item.id}" title="Удалить">×</button>` : ''}</div></td></tr>`).join('') : `<tr><td colspan="9" class="empty">В выбранной области нет требований</td></tr>`}</tbody></table></div></div></main></div>`;
   bindUserMenu();
   bindProjectPicker();
+  bindGroups();
   document.querySelectorAll('[data-filter]').forEach((checkbox) => {
     checkbox.onchange = async (event) => {
       const key = event.target.dataset.filter;
@@ -187,6 +223,7 @@ function debounce(callback, delay) { let timer; return (...args) => { clearTimeo
 function openModal(item = null) {
   document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop" id="modal"><form class="modal" id="requirement-form"><div class="modal-header"><div><p class="eyebrow">${item ? 'Редактирование' : 'Новая запись'}</p><h2>${item ? 'Изменить требование' : 'Добавить требование'}</h2></div><button type="button" class="close" id="close">×</button></div><div class="form-grid"><div class="field"><label>Номер</label><input name="number" value="${esc(item?.number || '')}" placeholder="Автоматически"></div><div class="field"><label>Краткое описание *</label><input name="description" required value="${esc(item?.description || '')}"></div><div class="field wide"><label>Детальное описание</label><div class="markdown-editor"><div class="markdown-toolbar"><button type="button" data-mark="bold" title="Жирный">B</button><button type="button" data-mark="italic" title="Курсив"><i>I</i></button><button type="button" data-mark="heading" title="Заголовок">H</button><button type="button" data-mark="bullet" title="Список">•</button><button type="button" data-mark="number" title="Нумерованный список">1.</button><button type="button" data-mark="code" title="Код">&lt;/&gt;</button><button type="button" id="preview-toggle" title="Предпросмотр">Предпросмотр</button></div><textarea id="details-markdown" name="detailsMarkdown" rows="8" placeholder="Опишите требование подробно в Markdown...">${esc(item?.detailsMarkdown || '')}</textarea><div id="markdown-preview" class="markdown-preview"></div></div></div><div class="field"><label>Тип требования *</label><select name="type" required><option value="">Выберите тип</option>${optionList(types, item?.type)}</select></div><div class="field"><label>Важность *</label><select name="priority" required><option value="">Выберите важность</option>${optionList(priorities, item?.priority)}</select></div><div class="field"><label>Сложность</label><select name="complexity"><option value="">Не указана</option>${optionList(complexities, item?.complexity)}</select></div><div class="field"><label>Статус *</label><select name="status" required>${optionList(statuses, item?.status || statuses[0])}</select></div><div class="field"><label>Номер релиза</label><input name="release" value="${esc(item?.release || '')}" placeholder="Например, 2.1"></div></div><p class="error" id="form-error"></p><div class="modal-actions"><button type="button" class="cancel" id="cancel">Отмена</button><button class="primary">${item ? 'Сохранить изменения' : 'Создать требование'}</button></div></form></div>`);
   const modal = document.querySelector('#modal'); const close = () => modal.remove(); document.querySelector('#close').onclick = close; document.querySelector('#cancel').onclick = close; document.querySelector('input[name="number"]').readOnly = true;
+  document.querySelector('#requirement-form .form-grid').insertAdjacentHTML('beforeend', `<div class="field"><label>Группа</label><select name="groupId">${groupOptions(item?.groupId || state.selectedGroupId)}</select></div>`);
   const editor = document.querySelector('#details-markdown'); const preview = document.querySelector('#markdown-preview'); const updatePreview = () => { preview.innerHTML = markdownToHtml(editor.value); };
   const previewToggle = document.querySelector('#preview-toggle');
   const modeSwitch = document.createElement('div');

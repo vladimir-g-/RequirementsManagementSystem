@@ -54,7 +54,8 @@
       "status": "В работе",
       "release": "2.1",
       "projectId": "project-alpha",
-      "detailsMarkdown": "Система _должна_ поддерживать экспорт в **PDF** формат.\n- Пункт 1\n- Пункт 2\n- Пункт 3"
+      "detailsMarkdown": "Система _должна_ поддерживать экспорт в **PDF** формат.\n- Пункт 1\n- Пункт 2\n- Пункт 3",
+      "groupId": "a3916d73-c7c5-4add-9056-02c91dae4ae4"
     },
     {
       "id": "req-2",
@@ -63,10 +64,11 @@
       "type": "Функциональное",
       "priority": "Средняя",
       "complexity": "Высокая",
-      "status": "Запланировано",
+      "status": "Черновик",
       "release": "2.2",
       "projectId": "project-alpha",
-      "detailsMarkdown": "Система должна сохранять историю изменений отчета."
+      "detailsMarkdown": "Система должна сохранять историю изменений отчета.",
+      "groupId": "a3916d73-c7c5-4add-9056-02c91dae4ae4"
     },
     {
       "id": "req-3",
@@ -77,7 +79,8 @@
       "complexity": "Высокая",
       "status": "Готово",
       "release": "1.4",
-      "projectId": "project-beta"
+      "projectId": "project-beta",
+      "groupId": null
     },
     {
       "id": "924b144d-ca74-46e9-af0d-ca633e6ca2b2",
@@ -87,9 +90,10 @@
       "type": "Нефункциональное",
       "priority": "Критическая",
       "complexity": "Средняя",
-      "status": "Запланировано",
+      "status": "Черновик",
       "release": "1",
-      "projectId": "project-alpha"
+      "projectId": "project-alpha",
+      "groupId": "a3916d73-c7c5-4add-9056-02c91dae4ae4"
     },
     {
       "id": "54d32ad6-0bb0-4e6c-b40a-35f4720ec9ee",
@@ -101,7 +105,8 @@
       "complexity": "",
       "status": "Запланировано",
       "release": "",
-      "projectId": "project-beta"
+      "projectId": "project-beta",
+      "groupId": null
     },
     {
       "id": "7dcb05f0-1338-4876-b80b-c7243deefed3",
@@ -113,7 +118,8 @@
       "complexity": "Высокая",
       "status": "В работе",
       "release": "",
-      "projectId": "project-alpha"
+      "projectId": "project-alpha",
+      "groupId": null
     },
     {
       "id": "f1b3f803-3dfb-4140-9d75-9b3d6e4090e3",
@@ -125,7 +131,8 @@
       "complexity": "Средняя",
       "status": "В работе",
       "release": "",
-      "projectId": "project-alpha"
+      "projectId": "project-alpha",
+      "groupId": "a3916d73-c7c5-4add-9056-02c91dae4ae4"
     }
   ],
   "requirementPrefixes": [
@@ -188,6 +195,20 @@
       "projectId": "project-beta",
       "type": "Пользовательская история",
       "prefix": "US"
+    }
+  ],
+  "groups": [
+    {
+      "id": "021e5d0c-7bd4-477b-9aae-44c64a70296d",
+      "name": "Функциональные требования",
+      "projectId": "project-alpha",
+      "parentId": null
+    },
+    {
+      "id": "a3916d73-c7c5-4add-9056-02c91dae4ae4",
+      "name": "Требования к отчетам",
+      "projectId": "project-alpha",
+      "parentId": "021e5d0c-7bd4-477b-9aae-44c64a70296d"
     }
   ]
 }

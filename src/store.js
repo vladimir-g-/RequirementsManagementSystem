@@ -17,6 +17,8 @@ export function createStore(dataFile, initialData) {
     permissions: { ...defaultPermissions, ...user.permissions }
   }));
   data.requirementPrefixes = Array.isArray(data.requirementPrefixes) ? data.requirementPrefixes : [];
+  data.groups = Array.isArray(data.groups) ? data.groups : [];
+  data.requirements = data.requirements.map((requirement) => ({ ...requirement, groupId: requirement.groupId || null }));
 
   function save() {
     writeFileSync(dataFile, JSON.stringify(data, null, 2));
