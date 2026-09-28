@@ -153,7 +153,8 @@ export function createApp({ port, publicDir, store, config, auth }) {
         const group = store.data.groups[index];
         if (!auth.can(user, request.method === 'DELETE' ? 'delete' : 'update', group.projectId)) return sendJson(response, 403, { error: 'Недостаточно прав для этой операции' });
         if (request.method === 'DELETE') {
-          if (store.data.groups.some((item) => item.parentId === group.id) || store.data.requirements.some((item) => item.groupId === group.id)) return sendJson(response, 409, { error: 'Сначала удалите подгруппы и отвяжите требования' });
+          if (store.data.requirements.some((item) => item.groupId === group.id)) return sendJson(response, 409, { error: 'Нельзя удалить группу, пока в ней есть требования' });
+          if (store.data.groups.some((item) => item.parentId === group.id)) return sendJson(response, 409, { error: 'Сначала удалите дочерние группы' });
           store.data.groups.splice(index, 1); store.save(); return sendJson(response, 200, { ok: true });
         }
         const input = await readBody(request);

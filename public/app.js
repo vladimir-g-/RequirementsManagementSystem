@@ -161,11 +161,13 @@ function groupOptions(selected = '') {
 function groupTree(parentId = null, level = 0) {
   return state.groups.filter((group) => group.parentId === parentId).map((group) => {
     const children = groupTree(group.id, level + 1);
-    return `<li><div class="group-row"><button class="group-select ${state.selectedGroupId === group.id ? 'active' : ''}" data-group-id="${esc(group.id)}">${esc(group.name)}</button><span class="group-actions">${can('update') ? `<button class="icon-button group-edit" data-id="${esc(group.id)}" title="Редактировать">✎</button>` : ''}${can('delete') ? `<button class="icon-button delete group-delete" data-id="${esc(group.id)}" title="Удалить">×</button>` : ''}</span></div>${children ? `<ul>${children}</ul>` : ''}</li>`;
+    return `<li><div class="group-row"><button class="group-select ${state.selectedGroupId === group.id ? 'active' : ''}" data-group-id="${esc(group.id)}">${esc(group.name)}</button><span class="group-actions">${can('update') ? `<button class="icon-button group-edit" data-id="${esc(group.id)}" title="Редактировать">✎</button>` : ''}${can('create') ? `<button class="icon-button group-add-child" data-id="${esc(group.id)}" title="Создать дочернюю группу" aria-label="Создать дочернюю группу">+</button>` : ''}${can('delete') ? `<button class="icon-button delete group-delete" data-id="${esc(group.id)}" title="Удалить">×</button>` : ''}</span></div>${children ? `<ul>${children}</ul>` : ''}</li>`;
   }).join('');
 }
-async function openGroupModal(item = null) {
-  document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop" id="group-modal"><form class="modal" id="group-form"><div class="modal-header"><div><p class="eyebrow">${item ? 'Редактирование' : 'Новая группа'}</p><h2>${item ? 'Изменить группу' : 'Создать группу'}</h2></div><button type="button" class="close" id="group-close">×</button></div><div class="field"><label>Название группы *</label><input name="name" required maxlength="200" value="${esc(item?.name || '')}"></div><div class="field"><label>Родительская группа</label><select name="parentId">${groupOptions(item?.parentId || '')}</select></div><p class="error" id="group-form-error"></p><div class="modal-actions"><button type="button" class="cancel" id="group-cancel">Отмена</button><button class="primary">${item ? 'Сохранить' : 'Создать группу'}</button></div></form></div>`);
+async function openGroupModal(item = null, parentId = '') {
+  const selectedParentId = item?.parentId || parentId;
+  const title = item ? 'Изменить группу' : parentId ? 'Создать дочернюю группу' : 'Создать группу';
+  document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop" id="group-modal"><form class="modal" id="group-form"><div class="modal-header"><div><p class="eyebrow">${item ? 'Редактирование' : 'Новая группа'}</p><h2>${title}</h2></div><button type="button" class="close" id="group-close">×</button></div><div class="field"><label>Название группы *</label><input name="name" required maxlength="200" value="${esc(item?.name || '')}"></div><div class="field"><label>Родительская группа</label><select name="parentId">${groupOptions(selectedParentId)}</select></div><p class="error" id="group-form-error"></p><div class="modal-actions"><button type="button" class="cancel" id="group-cancel">Отмена</button><button class="primary">${item ? 'Сохранить' : 'Создать группу'}</button></div></form></div>`);
   const modal = document.querySelector('#group-modal'); const close = () => modal.remove();
   document.querySelector('#group-close').onclick = close; document.querySelector('#group-cancel').onclick = close;
   document.querySelector('#group-form').onsubmit = async (event) => {
@@ -175,14 +177,16 @@ async function openGroupModal(item = null) {
   };
 }
 async function deleteGroup(id) {
-  if (!confirm('Удалить группу?')) return;
-  try { await api(`/api/groups/${id}`, { method: 'DELETE' }); state.selectedGroupId = ''; await loadGroups(); await refresh(); } catch (error) { alert(error.message); }
+  const group = state.groups.find((item) => item.id === id);
+  if (!confirm(`Удалить группу «${group?.name || ''}»? Удалить можно только группу без требований.`)) return;
+  try { await api(`/api/groups/${id}`, { method: 'DELETE' }); state.selectedGroupId = ''; await loadGroups(); await refresh(); } catch (error) { alert(`Не удалось удалить группу: ${error instanceof Error ? error.message : String(error)}`); }
 }
 function bindGroups() {
   document.querySelector('#all-groups').onclick = async () => { state.selectedGroupId = ''; await loadRequirements(); renderApp(); };
   document.querySelector('#add-group').onclick = () => openGroupModal();
   document.querySelectorAll('.group-select').forEach((button) => { button.onclick = async () => { state.selectedGroupId = button.dataset.groupId; await loadRequirements(); renderApp(); }; });
   document.querySelectorAll('.group-edit').forEach((button) => { button.onclick = () => openGroupModal(state.groups.find((group) => group.id === button.dataset.id)); });
+  document.querySelectorAll('.group-add-child').forEach((button) => { button.onclick = () => openGroupModal(null, button.dataset.id); });
   document.querySelectorAll('.group-delete').forEach((button) => { button.onclick = () => deleteGroup(button.dataset.id); });
 }
 function renderApp() {

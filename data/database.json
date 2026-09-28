@@ -209,12 +209,6 @@
       "name": "Требования к отчетам",
       "projectId": "project-alpha",
       "parentId": "021e5d0c-7bd4-477b-9aae-44c64a70296d"
-    },
-    {
-      "id": "e7be3b87-3512-4406-99f1-17d6baf0b6ba",
-      "name": "Нефункциональные требования",
-      "projectId": "project-alpha",
-      "parentId": null
     }
   ]
 }
