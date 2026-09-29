@@ -93,7 +93,7 @@
       "status": "Черновик",
       "release": "1",
       "projectId": "project-alpha",
-      "groupId": "e7be3b87-3512-4406-99f1-17d6baf0b6ba"
+      "groupId": "9401c4b0-aa95-4d6f-adb9-45deae538188"
     },
     {
       "id": "54d32ad6-0bb0-4e6c-b40a-35f4720ec9ee",
@@ -119,7 +119,7 @@
       "status": "В работе",
       "release": "",
       "projectId": "project-alpha",
-      "groupId": "e7be3b87-3512-4406-99f1-17d6baf0b6ba"
+      "groupId": "101d7819-5edd-4cc3-a37b-483173365185"
     },
     {
       "id": "f1b3f803-3dfb-4140-9d75-9b3d6e4090e3",
@@ -215,6 +215,24 @@
       "name": "Бизнес-требования",
       "projectId": "project-alpha",
       "parentId": null
+    },
+    {
+      "id": "ad63a7d8-a001-4ab5-97ef-fedca404ae19",
+      "name": "Нефункциональные требования",
+      "projectId": "project-alpha",
+      "parentId": null
+    },
+    {
+      "id": "101d7819-5edd-4cc3-a37b-483173365185",
+      "name": "Требования к локализации интерфейса",
+      "projectId": "project-alpha",
+      "parentId": "ad63a7d8-a001-4ab5-97ef-fedca404ae19"
+    },
+    {
+      "id": "9401c4b0-aa95-4d6f-adb9-45deae538188",
+      "name": "Требования к производительности",
+      "projectId": "project-alpha",
+      "parentId": "ad63a7d8-a001-4ab5-97ef-fedca404ae19"
     }
   ]
 }
