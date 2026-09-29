@@ -147,23 +147,26 @@ export function createApp({ port, publicDir, store, config, auth }) {
         store.data.groups.push(group); store.save(); return sendJson(response, 201, { group });
       }
       const groupMatch = path.match(/^\/api\/groups\/([^/]+)$/);
-      if (groupMatch && ['PUT', 'DELETE'].includes(request.method)) {
-        const index = store.data.groups.findIndex((group) => group.id === groupMatch[1]);
-        if (index < 0) return sendJson(response, 404, { error: 'Группа не найдена' });
-        const group = store.data.groups[index];
-        if (!auth.can(user, request.method === 'DELETE' ? 'delete' : 'update', group.projectId)) return sendJson(response, 403, { error: 'Недостаточно прав для этой операции' });
-        if (request.method === 'DELETE') {
-          if (store.data.requirements.some((item) => item.groupId === group.id)) return sendJson(response, 409, { error: 'Нельзя удалить группу, пока в ней есть требования' });
-          if (store.data.groups.some((item) => item.parentId === group.id)) return sendJson(response, 409, { error: 'Сначала удалите дочерние группы' });
-          store.data.groups.splice(index, 1); store.save(); return sendJson(response, 200, { ok: true });
+      if (groupMatch) {
+        const group = store.data.groups.find((g) => g.id === groupMatch[1]);
+        if (!group) return sendJson(response, 404, { error: 'Группа не найдена' });
+        if (!auth.can(user, 'read', group.projectId)) return sendJson(response, 403, { error: 'Нет права просматривать группу' });
+        if (request.method === 'GET') return sendJson(response, 200, { group });
+        if (request.method === 'PUT' || request.method === 'DELETE') {
+          if (!auth.can(user, request.method === 'DELETE' ? 'delete' : 'update', group.projectId)) return sendJson(response, 403, { error: 'Недостаточно прав для этой операции' });
+          if (request.method === 'DELETE') {
+            if (store.data.requirements.some((item) => item.groupId === group.id)) return sendJson(response, 409, { error: 'Нельзя удалить группу, пока в ней есть требования' });
+            if (store.data.groups.some((item) => item.parentId === group.id)) return sendJson(response, 409, { error: 'Сначала удалите дочерние группы' });
+            store.data.groups.splice(store.data.groups.indexOf(group), 1); store.save(); return sendJson(response, 200, { ok: true });
+          }
+          const input = await readBody(request);
+          const name = String(input.name || '').trim();
+          const parentId = input.parentId || null;
+          if (!name || name.length > 200) return sendJson(response, 400, { error: 'Укажите название группы длиной до 200 символов' });
+          if (parentId && (!groupForProject(parentId, group.projectId) || parentId === group.id || hasGroupDescendant(group.id, parentId))) return sendJson(response, 400, { error: 'Некорректная родительская группа' });
+          const updated = { ...group, name, parentId };
+          store.data.groups[store.data.groups.indexOf(group)] = updated; store.save(); return sendJson(response, 200, { group: updated });
         }
-        const input = await readBody(request);
-        const name = String(input.name || '').trim();
-        const parentId = input.parentId || null;
-        if (!name || name.length > 200) return sendJson(response, 400, { error: 'Укажите название группы длиной до 200 символов' });
-        if (parentId && (!groupForProject(parentId, group.projectId) || parentId === group.id || hasGroupDescendant(group.id, parentId))) return sendJson(response, 400, { error: 'Некорректная родительская группа' });
-        const updated = { ...group, name, parentId };
-        store.data.groups[index] = updated; store.save(); return sendJson(response, 200, { group: updated });
       }
       if (path === '/api/requirement-prefixes' && request.method === 'GET') {
         if (!requireAdmin(user, response)) return;

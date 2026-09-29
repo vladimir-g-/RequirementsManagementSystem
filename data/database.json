@@ -209,6 +209,12 @@
       "name": "Требования к отчетам",
       "projectId": "project-alpha",
       "parentId": "021e5d0c-7bd4-477b-9aae-44c64a70296d"
+    },
+    {
+      "id": "6599b219-fcf3-48d9-a16c-26ffc1e5bad7",
+      "name": "Бизнес-требования",
+      "projectId": "project-alpha",
+      "parentId": null
     }
   ]
 }

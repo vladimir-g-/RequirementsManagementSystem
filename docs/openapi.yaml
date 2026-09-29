@@ -13,6 +13,8 @@ tags:
     description: Аутентификация и текущая сессия
   - name: Config
     description: Справочники интерфейса
+  - name: Groups
+    description: Иерархические группы требований
   - name: Projects
     description: Проекты, доступные пользователю
   - name: Requirements
@@ -125,6 +127,173 @@ paths:
                       $ref: '#/components/schemas/Project'
         '401':
           $ref: '#/components/responses/Unauthorized'
+
+  /api/groups:
+    get:
+      tags: [Groups]
+      summary: Получить группы проекта
+      operationId: listGroups
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectIdQuery'
+      responses:
+        '200':
+          description: Группы проекта с учётом прав доступа пользователя
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [groups]
+                properties:
+                  groups:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Group'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: У пользователя нет права просмотра групп
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      tags: [Groups]
+      summary: Создать группу требований
+      operationId: createGroup
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GroupRequest'
+      responses:
+        '201':
+          description: Группа создана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupResponse'
+        '400':
+          description: Не заполнены обязательные поля, указано неизвестный проект или родительская группа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Нет права создавать группы в указанном проекте
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/groups/{id}:
+    parameters:
+      - $ref: '#/components/parameters/GroupId'
+    get:
+      tags: [Groups]
+      summary: Получить группу по идентификатору
+      operationId: getGroup
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Группа найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: У пользователя нет права просмотра группы
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Группа не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      tags: [Groups]
+      summary: Обновить группу требований
+      operationId: updateGroup
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GroupRequest'
+      responses:
+        '200':
+          description: Группа обновлена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupResponse'
+        '400':
+          description: Не заполнены обязательные поля, указано неизвестная родительская группа или недопустимая иерархия
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Недостаточно прав для изменения группы
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Группа не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags: [Groups]
+      summary: Удалить группу требований
+      operationId: deleteGroup
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Группа удалена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Недостаточно прав для удаления группы
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Группа не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Нельзя удалить группу — в ней есть требования или есть дочерние группы
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /api/requirement-prefixes:
     get:
@@ -457,6 +626,13 @@ components:
       in: path
       required: true
       description: Идентификатор требования
+      schema:
+        type: string
+    GroupId:
+      name: id
+      in: path
+      required: true
+      description: Идентификатор группы
       schema:
         type: string
     ProjectIdQuery:
@@ -822,3 +998,45 @@ components:
     Complexity:
       type: string
       enum: [Низкая, Средняя, Высокая]
+    Group:
+      type: object
+      required: [id, name, projectId, parentId]
+      properties:
+        id:
+          type: string
+          readOnly: true
+          description: UUID группы
+        name:
+          type: string
+          maxLength: 200
+        projectId:
+          type: string
+          readOnly: true
+          description: ID проекта, которому принадлежит группа
+        parentId:
+          type: string
+          nullable: true
+          description: ID родительской группы; null для корневых групп
+      additionalProperties: false
+    GroupRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: Название группы длиной до 200 символов
+          maxLength: 200
+        parentId:
+          type: string
+          nullable: true
+          description: ID родительской группы; null (или отсутствие) для корневой группы
+        projectId:
+          type: string
+          description: "Обязателен только при создании группы (POST /api/groups). При обновлении игнорируется."
+      additionalProperties: false
+    GroupResponse:
+      type: object
+      required: [group]
+      properties:
+        group:
+          $ref: '#/components/schemas/Group'
