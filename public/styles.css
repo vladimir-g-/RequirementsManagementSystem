@@ -90,7 +90,7 @@ h1, h2 { font-family: 'Space Grotesk', sans-serif; letter-spacing: 0; }
 .filter-option input { width: 15px; height: 15px; accent-color: var(--teal); }
 .filter-empty { padding: 8px 6px; color: var(--muted); font-size: 13px; }
 .toolbar .project-field { max-width: 310px; }
-.requirements-layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 16px; align-items: start; }
+.requirements-layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 16px; align-items: stretch; }
 .groups-panel { padding: 16px; border: 1px solid var(--line); border-radius: 8px; background: white; box-shadow: var(--shadow); }
 .groups-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .groups-heading-actions { display: flex; align-items: center; gap: 4px; }
