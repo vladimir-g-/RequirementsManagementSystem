@@ -12,6 +12,6 @@
     "nodejs",
     "requirements-management"
   ],
-  "author": "",
-  "license": "ISC"
+  "author": "Vladimir Geraskin",
+  "license": "GPL-2.0-only"
 }
