@@ -182,6 +182,50 @@ async function deleteGroup(id) {
   if (!confirm(`Удалить группу «${group?.name || ''}»? Удалить можно только группу без требований.`)) return;
   try { await api(`/api/groups/${id}`, { method: 'DELETE' }); state.selectedGroupId = ''; await loadGroups(); await refresh(); } catch (error) { alert(`Не удалось удалить группу: ${error instanceof Error ? error.message : String(error)}`); }
 }
+function initSplitter() {
+  const splitter = document.getElementById('splitter');
+  const layout = splitter?.parentElement;
+  const groupsPanel = layout?.querySelector('.groups-panel');
+  if (!splitter || !layout || !groupsPanel) return;
+
+  let isResizing = false;
+  let startX = 0;
+  let startWidth = 0;
+  const MIN_WIDTH = 180;
+  const MAX_RATIO = 0.6;
+
+  function onMouseDown(e) {
+    isResizing = true;
+    splitter.classList.add('dragging');
+    startX = e.clientX;
+    startWidth = groupsPanel.offsetWidth;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  }
+
+  function onMouseMove(e) {
+    if (!isResizing) return;
+    const delta = e.clientX - startX;
+    const maxWidth = layout.offsetWidth * MAX_RATIO;
+    let newWidth = Math.max(MIN_WIDTH, Math.min(maxWidth, startWidth + delta));
+    layout.style.setProperty('--groups-width', newWidth + 'px');
+  }
+
+  function onMouseUp() {
+    if (isResizing) {
+      isResizing = false;
+      splitter.classList.remove('dragging');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+  }
+
+  splitter.addEventListener('mousedown', onMouseDown);
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup', onMouseUp);
+}
+
 function bindGroups() {
   document.querySelector('#all-groups').onclick = async () => { state.selectedGroupId = ''; await loadRequirements(); renderApp(); };
   document.querySelector('#add-group').onclick = () => openGroupModal();
@@ -189,9 +233,10 @@ function bindGroups() {
   document.querySelectorAll('.group-edit').forEach((button) => { button.onclick = () => openGroupModal(state.groups.find((group) => group.id === button.dataset.id)); });
   document.querySelectorAll('.group-add-child').forEach((button) => { button.onclick = () => openGroupModal(null, button.dataset.id); });
   document.querySelectorAll('.group-delete').forEach((button) => { button.onclick = () => deleteGroup(button.dataset.id); });
+  initSplitter();
 }
 function renderApp() {
-  app.innerHTML = `<div class="shell"><header class="topbar"><div class="topbar-start"><div class="brand">RMS<span>.</span></div>${projectPicker()}</div>${userMenu()}</header><main class="content"><div class="heading"><div><h1>Требования</h1><p class="page-note">Группируйте требования в иерархию без ограничения вложенности.</p></div></div><div class="toolbar"><div class="field project-field"><label for="search">Поиск</label><input id="search" placeholder="Номер, описание или тип" value="${esc(state.filters.search)}"></div>${multiFilter('type', 'Тип', types)}${multiFilter('priority', 'Важность', priorities)}${multiFilter('complexity', 'Сложность', complexities)}${multiFilter('status', 'Статус', statuses)}${multiFilter('release', 'Релиз', state.releases)}<button class="clear" id="clear">Сбросить</button>${can('create') ? '<button class="primary" id="add">+ Новое требование</button>' : ''}</div><div class="requirements-layout"><aside class="groups-panel"><div class="groups-heading"><strong>Группы</strong><div class="groups-heading-actions">${can('create') ? '<button class="link-button" id="add-group">+ Новая группа</button>' : ''}<button class="link-button" id="all-groups">Все</button></div></div><ul class="group-tree">${groupTree()}</ul>${!state.groups.length ? '<p class="muted">Групп пока нет</p>' : ''}</aside><div class="table-wrap"><table><thead><tr><th>Номер</th><th>Краткое описание</th><th>Группа</th><th>Тип</th><th>Важность</th><th>Сложность</th><th>Статус</th><th>Релиз</th><th></th></tr></thead><tbody>${state.requirements.length ? state.requirements.map((item) => `<tr><td>${can('update') ? `<button class="requirement-number edit" data-id="${item.id}" title="Редактировать требование">${esc(item.number)}</button>` : esc(item.number)}</td><td class="description">${esc(item.description)}</td><td>${esc(state.groups.find((group) => group.id === item.groupId)?.name || 'Без группы')}</td><td>${esc(item.type)}</td><td>${badge(item.priority)}</td><td>${badge(item.complexity)}</td><td>${badge(item.status)}</td><td>${esc(item.release)}</td><td><div class="actions">${can('update') ? `<button class="icon-button edit" data-id="${item.id}" title="Редактировать">✎</button>` : ''}${can('delete') ? `<button class="icon-button delete-requirement" data-id="${item.id}" title="Удалить">×</button>` : ''}</div></td></tr>`).join('') : `<tr><td colspan="9" class="empty">В выбранной области нет требований</td></tr>`}</tbody></table></div></div></main></div>`;
+  app.innerHTML = `<div class="shell"><header class="topbar"><div class="topbar-start"><div class="brand">RMS<span>.</span></div>${projectPicker()}</div>${userMenu()}</header><main class="content"><div class="heading"><div><h1>Требования</h1><p class="page-note">Группируйте требования в иерархию без ограничения вложенности.</p></div></div><div class="toolbar"><div class="field project-field"><label for="search">Поиск</label><input id="search" placeholder="Номер, описание или тип" value="${esc(state.filters.search)}"></div>${multiFilter('type', 'Тип', types)}${multiFilter('priority', 'Важность', priorities)}${multiFilter('complexity', 'Сложность', complexities)}${multiFilter('status', 'Статус', statuses)}${multiFilter('release', 'Релиз', state.releases)}<button class="clear" id="clear">Сбросить</button>${can('create') ? '<button class="primary" id="add">+ Новое требование</button>' : ''}</div><div class="requirements-layout"><aside class="groups-panel"><div class="groups-heading"><strong>Группы</strong><div class="groups-heading-actions">${can('create') ? '<button class="link-button" id="add-group">+ Новая группа</button>' : ''}<button class="link-button" id="all-groups">Все</button></div></div><ul class="group-tree">${groupTree()}</ul>${!state.groups.length ? '<p class="muted">Групп пока нет</p>' : ''}</aside><div class="splitter" id="splitter"></div><div class="table-wrap"><table><thead><tr><th>Номер</th><th>Краткое описание</th><th>Группа</th><th>Тип</th><th>Важность</th><th>Сложность</th><th>Статус</th><th>Релиз</th><th></th></tr></thead><tbody>${state.requirements.length ? state.requirements.map((item) => `<tr><td>${can('update') ? `<button class="requirement-number edit" data-id="${item.id}" title="Редактировать требование">${esc(item.number)}</button>` : esc(item.number)}</td><td class="description">${esc(item.description)}</td><td>${esc(state.groups.find((group) => group.id === item.groupId)?.name || 'Без группы')}</td><td>${esc(item.type)}</td><td>${badge(item.priority)}</td><td>${badge(item.complexity)}</td><td>${badge(item.status)}</td><td>${esc(item.release)}</td><td><div class="actions">${can('update') ? `<button class="icon-button edit" data-id="${item.id}" title="Редактировать">✎</button>` : ''}${can('delete') ? `<button class="icon-button delete-requirement" data-id="${item.id}" title="Удалить">×</button>` : ''}</div></td></tr>`).join('') : `<tr><td colspan="9" class="empty">В выбранной области нет требований</td></tr>`}</tbody></table></div></div></main></div>`;
   bindUserMenu();
   bindProjectPicker();
   bindGroups();
