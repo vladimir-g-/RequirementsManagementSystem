@@ -172,6 +172,7 @@ function initColumnResizers() {
   const table = document.querySelector('.requirements-layout .table-wrap .requirements-table');
   if (!table) return;
 
+  let widthsAdjusted = false;
   table.querySelectorAll('thead th').forEach((header, index) => {
     const column = REQUIREMENT_COLUMNS[index];
     if (!column) return;
@@ -183,16 +184,38 @@ function initColumnResizers() {
     resizer.setAttribute('aria-orientation', 'vertical');
     resizer.title = `Изменить ширину столбца «${column.label || 'Действия'}»`;
     resizer.setAttribute('aria-label', `Ширина столбца «${column.label || 'Действия'}»`);
-    resizer.setAttribute('aria-valuemin', String(column.minWidth));
-    resizer.setAttribute('aria-valuemax', '800');
-    resizer.setAttribute('aria-valuenow', String(requirementColumnWidths[index]));
     header.append(resizer);
+    const headerStyle = getComputedStyle(header);
+    const horizontalSpace = (property) => Number.parseFloat(headerStyle[property]) || 0;
+    const contentWidth = [...header.children]
+      .filter((child) => child !== resizer)
+      .reduce((width, child) => {
+        const style = getComputedStyle(child);
+        return width + child.getBoundingClientRect().width + (Number.parseFloat(style.marginLeft) || 0) + (Number.parseFloat(style.marginRight) || 0);
+      }, 0);
+    const minWidth = Math.max(
+      column.minWidth,
+      Math.ceil(
+        contentWidth +
+        horizontalSpace('paddingLeft') +
+        Math.max(horizontalSpace('paddingRight'), resizer.getBoundingClientRect().width) +
+        horizontalSpace('borderLeftWidth') +
+        horizontalSpace('borderRightWidth')
+      )
+    );
+    resizer.setAttribute('aria-valuemin', String(minWidth));
+    resizer.setAttribute('aria-valuemax', '800');
+    if (requirementColumnWidths[index] < minWidth) {
+      requirementColumnWidths[index] = minWidth;
+      widthsAdjusted = true;
+    }
+    resizer.setAttribute('aria-valuenow', String(requirementColumnWidths[index]));
 
     let startX = 0;
     let startWidth = 0;
     let isResizing = false;
     const setWidth = (width) => {
-      requirementColumnWidths[index] = Math.max(column.minWidth, Math.min(800, width));
+      requirementColumnWidths[index] = Math.max(minWidth, Math.min(800, width));
       resizer.setAttribute('aria-valuenow', String(requirementColumnWidths[index]));
       updateRequirementTableWidth();
     };
@@ -222,12 +245,14 @@ function initColumnResizers() {
       if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'Home' || event.key === 'End') {
         event.preventDefault();
         event.stopPropagation();
-        const width = event.key === 'Home' ? column.minWidth : event.key === 'End' ? 800 : requirementColumnWidths[index] + (event.key === 'ArrowRight' ? step : -step);
+        const width = event.key === 'Home' ? minWidth : event.key === 'End' ? 800 : requirementColumnWidths[index] + (event.key === 'ArrowRight' ? step : -step);
         setWidth(width);
         saveRequirementColumnWidths();
       }
     });
   });
+  updateRequirementTableWidth();
+  if (widthsAdjusted) saveRequirementColumnWidths();
 }
 async function renderUsers() {
   const result = await api('/api/users');
