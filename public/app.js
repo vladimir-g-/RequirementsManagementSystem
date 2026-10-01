@@ -90,11 +90,26 @@ async function loadGroups() {
   if (state.selectedGroupId && !state.groups.some((group) => group.id === state.selectedGroupId)) state.selectedGroupId = '';
 }
 async function loadApp() { await loadConfig(); if (!state.projects.some((project) => project.id === state.filters.projectId)) state.filters.projectId = state.projects[0]?.id || ''; await loadGroups(); await loadRequirements(); renderApp(); }
+function groupAndDescendantIds(groupId) {
+  const descendants = new Set([groupId]);
+  const pending = [groupId];
+  while (pending.length) {
+    const parentId = pending.pop();
+    state.groups.forEach((group) => {
+      if (group.parentId === parentId && !descendants.has(group.id)) {
+        descendants.add(group.id);
+        pending.push(group.id);
+      }
+    });
+  }
+  return descendants;
+}
 async function loadRequirements() {
   const params = new URLSearchParams();
   Object.entries(state.filters).forEach(([key, value]) => Array.isArray(value) ? value.forEach((item) => params.append(key, item)) : value && params.set(key, value));
   const result = await api(`/api/requirements?${params}`);
-  state.requirements = state.selectedGroupId ? result.requirements.filter((item) => item.groupId === state.selectedGroupId) : result.requirements;
+  const groupIds = state.selectedGroupId ? groupAndDescendantIds(state.selectedGroupId) : null;
+  state.requirements = groupIds ? result.requirements.filter((item) => groupIds.has(item.groupId)) : result.requirements;
   state.releases = result.releases || state.releases;
   sortRequirements();
 }
