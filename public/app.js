@@ -18,7 +18,7 @@ const REQUIREMENT_COLUMNS = [
   { label: 'Сложность', minWidth: 110, defaultWidth: 120 },
   { label: 'Статус', minWidth: 110, defaultWidth: 130 },
   { label: 'Релиз', minWidth: 70, defaultWidth: 110 },
-  { label: '', minWidth: 74, defaultWidth: 88 }
+  { label: '', minWidth: 88, defaultWidth: 88 }
 ];
 let requirementColumnWidths = REQUIREMENT_COLUMNS.map((column) => column.defaultWidth);
 

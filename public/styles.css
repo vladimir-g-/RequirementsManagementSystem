@@ -177,6 +177,8 @@ th { padding: 15px 16px; text-align: left; background: #fbfcfc; color: var(--mut
 .column-resizer:focus-visible { outline: 2px solid var(--teal); outline-offset: -2px; }
 .requirements-table td { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .requirements-table .description { min-width: 0; }
+.requirements-table .actions { min-width: max-content; }
+.requirements-table .actions .icon-button { flex: 0 0 33px; }
 th.sortable { cursor: pointer; user-select: none; }
 th.sortable:hover { background: #eef6f4; color: var(--teal); }
 .sortable { white-space: nowrap; }
