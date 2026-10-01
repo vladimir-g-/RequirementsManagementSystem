@@ -114,13 +114,51 @@ async function loadRequirements() {
   sortRequirements();
 }
 function userMenu() {
-  const adminLink = state.user.role === 'Администратор' ? '<button type="button" id="users-link">Пользователи и права</button><button type="button" id="prefixes-link">Префиксы требований</button>' : '';
-  return `<details class="user-menu"><summary><span class="avatar">${esc((state.user.name || 'A')[0])}</span><span>${esc(state.user.name)}</span><span class="menu-chevron" aria-hidden="true">⌄</span></summary><div class="user-menu-list"><button type="button" id="profile-link">Профиль</button>${adminLink}<button type="button" id="logout">Выйти</button></div></details>`;
+  const adminMenu = state.user.role === 'Администратор' ? '<div class="user-submenu"><button type="button" class="user-submenu-toggle" id="admin-menu-toggle" aria-expanded="false" aria-controls="admin-submenu">Администрирование<span class="submenu-chevron" aria-hidden="true">›</span></button><div class="user-submenu-list" id="admin-submenu" hidden><button type="button" id="users-link">Пользователи и права</button><button type="button" id="prefixes-link">Префиксы требований</button></div></div>' : '';
+  return `<details class="user-menu"><summary><span class="avatar">${esc((state.user.name || 'A')[0])}</span><span>${esc(state.user.name)}</span><span class="menu-chevron" aria-hidden="true">⌄</span></summary><div class="user-menu-list"><button type="button" id="profile-link">Профиль</button>${adminMenu}<button type="button" id="logout">Выйти</button></div></details>`;
 }
 function projectPicker() {
   return `<div class="topbar-project field"><label for="project">Активный проект</label><select id="project">${state.projects.map((item) => `<option value="${item.id}" ${item.id === state.filters.projectId ? 'selected' : ''}>${esc(item.code)} · ${esc(item.name)}</option>`).join('')}</select></div>`;
 }
 function bindUserMenu() {
+  const userMenuElement = document.querySelector('.user-menu');
+  const adminMenu = document.querySelector('.user-submenu');
+  const adminToggle = document.querySelector('#admin-menu-toggle');
+  const adminSubmenu = document.querySelector('#admin-submenu');
+  const setAdminMenuOpen = (open) => {
+    if (!adminMenu || !adminToggle || !adminSubmenu) return;
+    adminMenu.classList.toggle('open', open);
+    adminToggle.setAttribute('aria-expanded', String(open));
+    adminSubmenu.hidden = !open;
+  };
+  if (adminMenu && adminToggle) {
+    adminMenu.addEventListener('pointerenter', (event) => {
+      if (event.pointerType !== 'touch') setAdminMenuOpen(true);
+    });
+    adminMenu.addEventListener('pointerleave', () => {
+      if (!adminMenu.contains(document.activeElement)) setAdminMenuOpen(false);
+    });
+    adminMenu.addEventListener('focusin', (event) => {
+      if (event.target !== adminToggle) setAdminMenuOpen(true);
+    });
+    adminMenu.addEventListener('focusout', (event) => {
+      if (!adminMenu.contains(event.relatedTarget) && !adminMenu.matches(':hover')) setAdminMenuOpen(false);
+    });
+    adminToggle.addEventListener('click', () => setAdminMenuOpen(true));
+    adminMenu.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        setAdminMenuOpen(false);
+        adminToggle.focus();
+      } else if (event.target === adminToggle && event.key === 'ArrowRight') {
+        event.preventDefault();
+        setAdminMenuOpen(true);
+        adminSubmenu.querySelector('button')?.focus();
+      }
+    });
+    userMenuElement.addEventListener('toggle', () => {
+      if (!userMenuElement.open) setAdminMenuOpen(false);
+    });
+  }
   document.querySelector('#profile-link').onclick = () => renderProfile();
   document.querySelector('#users-link')?.addEventListener('click', () => renderUsers());
   document.querySelector('#prefixes-link')?.addEventListener('click', () => renderPrefixSettings());
