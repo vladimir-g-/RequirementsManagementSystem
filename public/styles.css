@@ -163,7 +163,15 @@ h1, h2 { font-family: 'Space Grotesk', sans-serif; letter-spacing: 0; }
   min-height: 0;
 }
 table { width: 100%; min-width: 920px; border-collapse: collapse; }
+.requirements-table { width: max-content; min-width: 920px; table-layout: fixed; }
 th { padding: 15px 16px; text-align: left; background: #fbfcfc; color: var(--muted); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+.requirements-table th.column-resizable { position: relative; padding-right: 20px; }
+.column-resizer { position: absolute; top: 0; right: 0; width: 12px; height: 100%; border: 0; padding: 0; background: transparent; cursor: col-resize; touch-action: none; }
+.column-resizer::after { position: absolute; top: 25%; bottom: 25%; left: 5px; width: 2px; border-radius: 2px; background: #dce4e5; content: ''; }
+.column-resizer:hover::after, .column-resizer:focus-visible::after, .column-resizer.dragging::after { background: var(--teal); }
+.column-resizer:focus-visible { outline: 2px solid var(--teal); outline-offset: -2px; }
+.requirements-table td { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.requirements-table .description { min-width: 0; }
 th.sortable { cursor: pointer; user-select: none; }
 th.sortable:hover { background: #eef6f4; color: var(--teal); }
 .sortable { white-space: nowrap; }

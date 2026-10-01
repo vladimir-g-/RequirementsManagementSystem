@@ -9,6 +9,18 @@ let priorities = [];
 let complexities = [];
 let sortOrders = {};
 let filtersDirty = false;
+const REQUIREMENT_COLUMNS = [
+  { label: 'Номер', minWidth: 80, defaultWidth: 126 },
+  { label: 'Краткое описание', minWidth: 180, defaultWidth: 280 },
+  { label: 'Группа', minWidth: 90, defaultWidth: 150 },
+  { label: 'Тип', minWidth: 70, defaultWidth: 130 },
+  { label: 'Важность', minWidth: 105, defaultWidth: 120 },
+  { label: 'Сложность', minWidth: 110, defaultWidth: 120 },
+  { label: 'Статус', minWidth: 110, defaultWidth: 130 },
+  { label: 'Релиз', minWidth: 70, defaultWidth: 110 },
+  { label: '', minWidth: 74, defaultWidth: 88 }
+];
+let requirementColumnWidths = REQUIREMENT_COLUMNS.map((column) => column.defaultWidth);
 
 function esc(value = '') { return String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char])); }
 function optionList(values, selected) { return values.map((value) => `<option ${value === selected ? 'selected' : ''}>${esc(value)}</option>`).join(''); }
@@ -114,6 +126,108 @@ function renderProfile() {
 function renderAccessDenied(message = 'У вашей учетной записи нет права просматривать требования.') {
   app.innerHTML = `<div class="shell"><header class="topbar"><div class="topbar-start"><div class="brand">RMS<span>.</span></div>${projectPicker()}</div>${userMenu()}</header><main class="content"><section class="access-denied"><p class="eyebrow">Доступ ограничен</p><h1>Недостаточно прав</h1><p>${esc(message)}</p></section></main></div>`;
   bindUserMenu(); bindProjectPicker();
+}
+function loadRequirementColumnWidths() {
+  const userId = state.user?.id || state.user?.username || 'guest';
+  const storedWidths = localStorage.getItem(`requirement-column-widths:${userId}`);
+  if (!storedWidths) {
+    requirementColumnWidths = REQUIREMENT_COLUMNS.map((column) => column.defaultWidth);
+    return;
+  }
+
+  try {
+    const widths = JSON.parse(storedWidths);
+    requirementColumnWidths = REQUIREMENT_COLUMNS.map((column, index) => {
+      const width = widths[index];
+      return Number.isFinite(width) ? Math.max(column.minWidth, Math.min(800, width)) : column.defaultWidth;
+    });
+  } catch {
+    requirementColumnWidths = REQUIREMENT_COLUMNS.map((column) => column.defaultWidth);
+  }
+}
+function updateRequirementTableWidth() {
+  const table = document.querySelector('.requirements-layout .table-wrap .requirements-table');
+  if (!table) return;
+  table.style.width = `${Math.max(920, requirementColumnWidths.reduce((total, width) => total + width, 0))}px`;
+  table.querySelectorAll('col').forEach((column, index) => {
+    column.style.width = `${requirementColumnWidths[index]}px`;
+  });
+}
+function saveRequirementColumnWidths() {
+  const userId = state.user?.id || state.user?.username || 'guest';
+  localStorage.setItem(`requirement-column-widths:${userId}`, JSON.stringify(requirementColumnWidths));
+}
+function initRequirementTable() {
+  loadRequirementColumnWidths();
+  const table = document.querySelector('.requirements-layout .table-wrap table');
+  if (!table) return;
+  table.classList.add('requirements-table');
+  table.id = 'requirements-table';
+  const colgroup = document.createElement('colgroup');
+  REQUIREMENT_COLUMNS.forEach(() => colgroup.append(document.createElement('col')));
+  table.insertBefore(colgroup, table.firstChild);
+  updateRequirementTableWidth();
+}
+function initColumnResizers() {
+  const table = document.querySelector('.requirements-layout .table-wrap .requirements-table');
+  if (!table) return;
+
+  table.querySelectorAll('thead th').forEach((header, index) => {
+    const column = REQUIREMENT_COLUMNS[index];
+    if (!column) return;
+    header.classList.add('column-resizable');
+    const resizer = document.createElement('button');
+    resizer.type = 'button';
+    resizer.className = 'column-resizer';
+    resizer.setAttribute('role', 'separator');
+    resizer.setAttribute('aria-orientation', 'vertical');
+    resizer.title = `Изменить ширину столбца «${column.label || 'Действия'}»`;
+    resizer.setAttribute('aria-label', `Ширина столбца «${column.label || 'Действия'}»`);
+    resizer.setAttribute('aria-valuemin', String(column.minWidth));
+    resizer.setAttribute('aria-valuemax', '800');
+    resizer.setAttribute('aria-valuenow', String(requirementColumnWidths[index]));
+    header.append(resizer);
+
+    let startX = 0;
+    let startWidth = 0;
+    let isResizing = false;
+    const setWidth = (width) => {
+      requirementColumnWidths[index] = Math.max(column.minWidth, Math.min(800, width));
+      resizer.setAttribute('aria-valuenow', String(requirementColumnWidths[index]));
+      updateRequirementTableWidth();
+    };
+    resizer.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      isResizing = true;
+      startX = event.clientX;
+      startWidth = requirementColumnWidths[index];
+      resizer.classList.add('dragging');
+      resizer.setPointerCapture(event.pointerId);
+    });
+    resizer.addEventListener('pointermove', (event) => {
+      if (isResizing) setWidth(startWidth + event.clientX - startX);
+    });
+    const finishResize = () => {
+      if (!isResizing) return;
+      isResizing = false;
+      resizer.classList.remove('dragging');
+      saveRequirementColumnWidths();
+    };
+    resizer.addEventListener('pointerup', finishResize);
+    resizer.addEventListener('pointercancel', finishResize);
+    resizer.addEventListener('click', (event) => event.stopPropagation());
+    resizer.addEventListener('keydown', (event) => {
+      const step = event.shiftKey ? 50 : 10;
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'Home' || event.key === 'End') {
+        event.preventDefault();
+        event.stopPropagation();
+        const width = event.key === 'Home' ? column.minWidth : event.key === 'End' ? 800 : requirementColumnWidths[index] + (event.key === 'ArrowRight' ? step : -step);
+        setWidth(width);
+        saveRequirementColumnWidths();
+      }
+    });
+  });
 }
 async function renderUsers() {
   const result = await api('/api/users');
@@ -237,6 +351,7 @@ function bindGroups() {
 }
 function renderApp() {
   app.innerHTML = `<div class="shell"><header class="topbar"><div class="topbar-start"><div class="brand">RMS<span>.</span></div>${projectPicker()}</div>${userMenu()}</header><main class="content"><div class="heading"><div><h1>Требования</h1><p class="page-note">Группируйте требования в иерархию без ограничения вложенности.</p></div></div><div class="toolbar"><div class="field project-field"><label for="search">Поиск</label><input id="search" placeholder="Номер, описание или тип" value="${esc(state.filters.search)}"></div>${multiFilter('type', 'Тип', types)}${multiFilter('priority', 'Важность', priorities)}${multiFilter('complexity', 'Сложность', complexities)}${multiFilter('status', 'Статус', statuses)}${multiFilter('release', 'Релиз', state.releases)}<button class="clear" id="clear">Сбросить</button>${can('create') ? '<button class="primary" id="add">+ Новое требование</button>' : ''}</div><div class="requirements-layout"><aside class="groups-panel"><div class="groups-heading"><strong>Группы</strong><div class="groups-heading-actions">${can('create') ? '<button class="link-button" id="add-group">+ Новая группа</button>' : ''}<button class="link-button" id="all-groups">Все</button></div></div><ul class="group-tree">${groupTree()}</ul>${!state.groups.length ? '<p class="muted">Групп пока нет</p>' : ''}</aside><div class="splitter" id="splitter"></div><div class="table-wrap"><table><thead><tr><th>Номер</th><th>Краткое описание</th><th>Группа</th><th>Тип</th><th>Важность</th><th>Сложность</th><th>Статус</th><th>Релиз</th><th></th></tr></thead><tbody>${state.requirements.length ? state.requirements.map((item) => `<tr><td>${can('update') ? `<button class="requirement-number edit" data-id="${item.id}" title="Редактировать требование">${esc(item.number)}</button>` : esc(item.number)}</td><td class="description">${esc(item.description)}</td><td>${esc(state.groups.find((group) => group.id === item.groupId)?.name || 'Без группы')}</td><td>${esc(item.type)}</td><td>${badge(item.priority)}</td><td>${badge(item.complexity)}</td><td>${badge(item.status)}</td><td>${esc(item.release)}</td><td><div class="actions">${can('update') ? `<button class="icon-button edit" data-id="${item.id}" title="Редактировать">✎</button>` : ''}${can('delete') ? `<button class="icon-button delete-requirement" data-id="${item.id}" title="Удалить">×</button>` : ''}</div></td></tr>`).join('') : `<tr><td colspan="9" class="empty">В выбранной области нет требований</td></tr>`}</tbody></table></div></div></main></div>`;
+  initRequirementTable();
   bindUserMenu();
   bindProjectPicker();
   bindGroups();
@@ -267,6 +382,7 @@ function renderApp() {
       renderApp();
     };
   });
+  initColumnResizers();
 }
 async function refresh() { await loadRequirements(); renderApp(); }
 function debounce(callback, delay) { let timer; return (...args) => { clearTimeout(timer); timer = setTimeout(() => callback(...args), delay); }; }
