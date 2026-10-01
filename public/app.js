@@ -9,6 +9,7 @@ let priorities = [];
 let complexities = [];
 let sortOrders = {};
 let filtersDirty = false;
+let groupsPanelWidth = null;
 const REQUIREMENT_COLUMNS = [
   { label: 'Номер', minWidth: 80, defaultWidth: 126 },
   { label: 'Краткое описание', minWidth: 180, defaultWidth: 280 },
@@ -379,6 +380,7 @@ function initSplitter() {
   const layout = splitter?.parentElement;
   const groupsPanel = layout?.querySelector('.groups-panel');
   if (!splitter || !layout || !groupsPanel) return;
+  if (groupsPanelWidth !== null) layout.style.setProperty('--groups-width', `${groupsPanelWidth}px`);
 
   let isResizing = false;
   let startX = 0;
@@ -401,7 +403,8 @@ function initSplitter() {
     const delta = e.clientX - startX;
     const maxWidth = layout.offsetWidth * MAX_RATIO;
     let newWidth = Math.max(MIN_WIDTH, Math.min(maxWidth, startWidth + delta));
-    layout.style.setProperty('--groups-width', newWidth + 'px');
+    groupsPanelWidth = newWidth;
+    layout.style.setProperty('--groups-width', `${groupsPanelWidth}px`);
   }
 
   function onMouseUp() {
