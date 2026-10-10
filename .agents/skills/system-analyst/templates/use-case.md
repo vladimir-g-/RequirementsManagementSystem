@@ -20,14 +20,14 @@
 
 - {{Precondition}}
 
-## Main scenario
+## Main flow
 
 1. {{Actor}} ...
 2. {{System}} ...
 3. {{Actor}} ...
 4. {{System}} ...
 
-## Alternative scenarios
+## Alternative flows
 
 ### A1 — {{Title}}
 
@@ -41,7 +41,7 @@
 2. {{System/Actor}} ...
 3. ...
 
-## Exception scenarios
+## Exception flows
 
 ### E1 — {{Title}}
 
@@ -56,10 +56,6 @@
 ## Functional requirements
 
 - [FR-XXXX](../functional/FR-XXXX.md)
-
-## Acceptance criteria
-
-- [AC-XXXX](../acceptance-criteria/AC-XXXX.md)
 
 ## Postconditions
 
