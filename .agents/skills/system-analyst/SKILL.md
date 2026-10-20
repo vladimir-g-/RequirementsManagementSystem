@@ -359,6 +359,9 @@ A Functional Requirement may be realized by one or more Use Cases.
 
 Use Cases can also be used during elicitation to discover Functional Requirements.
 
+When you write alternative or exception scenarios, write a condition in specific flow (main scenario, or alternative/exception scenario) that triggers the scenario. 
+Example: if user selected option A, then the alternative scenario A1 is triggered. If user selected option B, then the alternative scenario A2 is triggered. If user selected option C, then the exception scenario E1 is triggered.
+
 ---
 
 # 6. Scenarios
@@ -378,6 +381,8 @@ Do not create a separate artifact for every alternative path.
 Create a separate Use Case only when the interaction represents a distinct actor goal/capability or otherwise has an independent semantic identity.
 
 If scenarios become exceptionally large, reusable or independently governed, a separate artifact may be introduced deliberately, but this is an exception rather than the default model.
+
+When you write alternative or exception scenarios, write a condition that triggers the scenario.
 
 ---
 
