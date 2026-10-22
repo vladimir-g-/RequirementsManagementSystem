@@ -15,8 +15,18 @@ const initialData = {
   groups: []
 };
 
-const store = createStore(dataFile, initialData);
 const config = createConfig(rootDir);
+const store = createStore(dataFile, initialData);
+const legacyTypeIds = new Map(config.load().types.map(({ id, name }) => [name, id]));
+let migratedRequirementTypes = false;
+for (const item of [...store.data.requirements, ...(store.data.requirementPrefixes || [])]) {
+  const typeId = legacyTypeIds.get(item.type);
+  if (typeId) {
+    item.type = typeId;
+    migratedRequirementTypes = true;
+  }
+}
+if (migratedRequirementTypes) store.save();
 const auth = createAuth(store);
 const server = createApp({ port, publicDir, store, config, auth });
 

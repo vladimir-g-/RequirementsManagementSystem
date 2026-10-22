@@ -48,7 +48,7 @@
       "id": "req-1",
       "number": "ANL-001",
       "description": "Пользователь может экспортировать отчет в PDF",
-      "type": "Функциональное",
+      "type": "functional",
       "priority": "Высокая",
       "complexity": "Средняя",
       "status": "В работе",
@@ -61,7 +61,7 @@
       "id": "req-2",
       "number": "ANL-002",
       "description": "Система сохраняет историю изменений отчета",
-      "type": "Функциональное",
+      "type": "functional",
       "priority": "Средняя",
       "complexity": "Высокая",
       "status": "Черновик",
@@ -74,7 +74,7 @@
       "id": "req-3",
       "number": "MOB-001",
       "description": "Приложение поддерживает вход по биометрии",
-      "type": "Безопасность",
+      "type": "security",
       "priority": "Критическая",
       "complexity": "Высокая",
       "status": "Готово",
@@ -87,7 +87,7 @@
       "number": "ANL-003",
       "description": "Скорость формирования отчета",
       "detailsMarkdown": "Отчет должен формироваться не дольше 3 секунд.",
-      "type": "Нефункциональное",
+      "type": "non-functional",
       "priority": "Критическая",
       "complexity": "Средняя",
       "status": "Черновик",
@@ -100,7 +100,7 @@
       "number": "MOB-002",
       "description": "Приложение поддерживает смену языка пользовательского интерфейса",
       "detailsMarkdown": "Приложение позволяет изменить язык пользовательского интерфейса.",
-      "type": "Нефункциональное",
+      "type": "non-functional",
       "priority": "Высокая",
       "complexity": "",
       "status": "Запланировано",
@@ -113,7 +113,7 @@
       "number": "NFR-001",
       "description": "Поддержка смены языка интерфейса",
       "detailsMarkdown": "Система должна предоставлять пользователю возможность изменения языка пользовательского интерфейса. \n",
-      "type": "Нефункциональное",
+      "type": "non-functional",
       "priority": "Средняя",
       "complexity": "Высокая",
       "status": "В работе",
@@ -126,75 +126,111 @@
       "number": "UC-001",
       "description": "Печать отчета пользователем",
       "detailsMarkdown": "### Исходное состояние\n- Пользователь открыл форму отчета\n- Отчет сформирован\n### Ход сценария\n1. Пользователь нажимает кнопку печати отчета\n1. Система отображает пользователю форму для выбора принтера\n1. Пользователь выбирает принтер\n1. Пользователь нажимает кнопку \"Печать\"\n1. Система посылает отчет на печать на указанный принтер\n### Конечное состояние\n- Отображено сообщение о результате печати (успех или ошибка)",
-      "type": "Сценарий использования",
+      "type": "use-case",
       "priority": "Высокая",
       "complexity": "Средняя",
       "status": "В работе",
       "release": "",
       "projectId": "project-alpha",
       "groupId": "a3916d73-c7c5-4add-9056-02c91dae4ae4"
+    },
+    {
+      "id": "f162f1da-d5ad-4df8-a104-2a6b7d9e5cc9",
+      "number": "BR-001",
+      "description": "Ускорение формирования отчета",
+      "detailsMarkdown": "Необходимо сократить время пользователей на формирования отчета.",
+      "type": "business-requirement",
+      "priority": "Высокая",
+      "complexity": "",
+      "status": "Согласовано",
+      "release": "",
+      "projectId": "project-alpha",
+      "groupId": "6599b219-fcf3-48d9-a16c-26ffc1e5bad7"
+    },
+    {
+      "id": "2e5ff490-6b5d-4ddf-bcd0-9c7b41fa6ffb",
+      "number": "FR-001",
+      "description": "Формирование отчета",
+      "detailsMarkdown": "Пользователь должен иметь возможность формировать отчет из системы.",
+      "type": "functional",
+      "priority": "Высокая",
+      "complexity": "Средняя",
+      "status": "Черновик",
+      "release": "",
+      "projectId": "project-alpha",
+      "groupId": "021e5d0c-7bd4-477b-9aae-44c64a70296d"
     }
   ],
   "requirementPrefixes": [
     {
       "projectId": "project-alpha",
-      "type": "Функциональное",
+      "type": "functional",
       "prefix": "FR"
     },
     {
       "projectId": "project-alpha",
-      "type": "Нефункциональное",
+      "type": "non-functional",
       "prefix": "NFR"
     },
     {
       "projectId": "project-alpha",
-      "type": "Безопасность",
+      "type": "security",
       "prefix": "SEQ"
     },
     {
       "projectId": "project-alpha",
-      "type": "Интеграционное",
+      "type": "integration",
       "prefix": "INT"
     },
     {
       "projectId": "project-alpha",
-      "type": "Сценарий использования",
+      "type": "use-case",
       "prefix": "UC"
     },
     {
       "projectId": "project-alpha",
-      "type": "Пользовательская история",
+      "type": "user-story",
       "prefix": "US"
     },
     {
+      "projectId": "project-alpha",
+      "type": "business-requirement",
+      "prefix": "BR"
+    },
+    {
       "projectId": "project-beta",
-      "type": "Функциональное",
+      "type": "functional",
       "prefix": "FR"
     },
     {
       "projectId": "project-beta",
-      "type": "Нефункциональное",
+      "type": "non-functional",
       "prefix": "NFR"
     },
     {
       "projectId": "project-beta",
-      "type": "Безопасность",
+      "type": "security",
       "prefix": "SEQ"
     },
     {
       "projectId": "project-beta",
-      "type": "Интеграционное",
+      "type": "integration",
       "prefix": "INT"
     },
     {
       "projectId": "project-beta",
-      "type": "Сценарий использования",
+      "type": "use-case",
       "prefix": "UC"
     },
     {
       "projectId": "project-beta",
-      "type": "Пользовательская история",
+      "type": "user-story",
       "prefix": "US"
+    },
+    {
+      "projectId": "project-beta",
+      "type": "business-requirement",
+      "prefix": "MOB"
     }
   ],
   "groups": [

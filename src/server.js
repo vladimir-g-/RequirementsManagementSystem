@@ -55,7 +55,7 @@ export function createApp({ port, publicDir, store, config, auth }) {
   }
 
   function validValue(name, value, configs) {
-    return configs[name].includes(value);
+    return configs[name].some((item) => typeof item === 'string' ? item === value : item.id === value);
   }
 
   function visibleProjects(user, projects) {
@@ -170,7 +170,7 @@ export function createApp({ port, publicDir, store, config, auth }) {
       }
       if (path === '/api/requirement-prefixes' && request.method === 'GET') {
         if (!requireAdmin(user, response)) return;
-        const prefixes = configs.projects.flatMap((project) => configs.types.map((type) => ({ projectId: project.id, type, prefix: prefixFor(project.id, type, configs) })));
+        const prefixes = configs.projects.flatMap((project) => configs.types.map(({ id }) => ({ projectId: project.id, type: id, prefix: prefixFor(project.id, id, configs) })));
         return sendJson(response, 200, { prefixes });
       }
       if (path === '/api/requirement-prefixes' && request.method === 'PUT') {
@@ -178,7 +178,7 @@ export function createApp({ port, publicDir, store, config, auth }) {
         const input = await readBody(request);
         if (!Array.isArray(input.prefixes)) return sendJson(response, 400, { error: 'Ожидается список префиксов' });
         const prefixes = input.prefixes.map((item) => ({ projectId: item.projectId, type: item.type, prefix: String(item.prefix || '').trim() })).filter((item) => item.prefix);
-        const valid = prefixes.every((item) => configs.projects.some((project) => project.id === item.projectId) && configs.types.includes(item.type) && /^[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё0-9_-]{0,19}$/.test(item.prefix));
+        const valid = prefixes.every((item) => configs.projects.some((project) => project.id === item.projectId) && validValue('types', item.type, configs) && /^[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё0-9_-]{0,19}$/.test(item.prefix));
         const unique = new Set(prefixes.map((item) => `${item.projectId}:${item.type}`)).size === prefixes.length;
         if (!valid || !unique) return sendJson(response, 400, { error: 'Проверьте проекты, типы и формат префиксов' });
         store.data.requirementPrefixes = prefixes; store.save(); return sendJson(response, 200, { prefixes });
@@ -220,7 +220,7 @@ export function createApp({ port, publicDir, store, config, auth }) {
         const search = (url.searchParams.get('search') || '').toLowerCase();
         const filters = ['type', 'priority', 'status', 'complexity', 'release'].reduce((result, key) => { result[key] = url.searchParams.getAll(key); return result; }, {});
         const projectRequirements = visibleRequirements(user, store.data.requirements).filter((item) => !projectId || item.projectId === projectId);
-        const requirements = projectRequirements.filter((item) => Object.entries(filters).every(([key, values]) => !values.length || values.includes(item[key])) && (!search || `${item.number} ${item.description} ${item.type}`.toLowerCase().includes(search)));
+        const requirements = projectRequirements.filter((item) => Object.entries(filters).every(([key, values]) => !values.length || values.includes(item[key])) && (!search || `${item.number} ${item.description} ${configs.types.find((type) => type.id === item.type)?.name || item.type} ${item.type}`.toLowerCase().includes(search)));
         const releases = [...new Set(projectRequirements.map((item) => item.release).filter(Boolean))].sort((first, second) => first.localeCompare(second, 'ru', { numeric: true }));
         return sendJson(response, 200, { requirements, releases });
       }
