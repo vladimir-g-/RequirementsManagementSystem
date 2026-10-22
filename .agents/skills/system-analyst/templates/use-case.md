@@ -1,33 +1,33 @@
 # {{ID}} — {{Title}}
 
-## Goal
+## Цель
 
 {{Actor's goal}}
 
-## Primary actor
+## Основной исполнитель
 
 {{Actor}}
 
-## Supporting actors
+## Дополнительные исполнители
 
 - {{Actor/System}}
 
-## Trigger
+## Триггер
 
 {{What starts the use case}}
 
-## Preconditions
+## Предварительные условия
 
 - {{Precondition}}
 
-## Main flow
+## Основной поток
 
 1. {{Actor}} ...
 2. {{System}} ...
 3. {{Actor}} ...
 4. {{System}} ...
 
-## Alternative flows
+## Альтернативные потоки
 
 ### A1 — {{Title}}
 
@@ -41,7 +41,7 @@
 2. {{System/Actor}} ...
 3. ...
 
-## Exception flows
+## Исключительные потоки
 
 ### E1 — {{Title}}
 
@@ -49,27 +49,27 @@
 2. {{System}} ...
 3. ...
 
-## Business rules
-
-- [BRL-XXXX](../business-rules/BRL-XXXX.md)
-
-## Functional requirements
-
-- [FR-XXXX](../functional/FR-XXXX.md)
-
-## Postconditions
+## Состояние после выполнения
 
 - {{Result}}
 
-## Open questions
+## Бизнес-правила
+
+- [BRL-XXXX](../business-rules/BRL-XXXX.md)
+
+## Функциональные требования
+
+- [FR-XXXX](../functional/FR-XXXX.md)
+
+## Открытые вопросы
 
 - [OQ-XXXX](../questions/OQ-XXXX.md)
 
-## Status
+## Статус
 
 Draft
 
-## Change history
+## История изменений
 
 | Version | Date | Change |
 |---|---|---|

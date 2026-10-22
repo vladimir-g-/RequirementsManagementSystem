@@ -348,7 +348,6 @@ A Use Case normally contains:
 - postconditions;
 - applicable Business Rules;
 - related Functional Requirements;
-- relevant Acceptance Criteria;
 - Open Questions where applicable.
 
 A Use Case is not automatically a Functional Requirement.
@@ -382,7 +381,7 @@ Create a separate Use Case only when the interaction represents a distinct actor
 
 If scenarios become exceptionally large, reusable or independently governed, a separate artifact may be introduced deliberately, but this is an exception rather than the default model.
 
-When you write alternative or exception scenarios, write a condition that triggers the scenario.
+When you write alternative or exception scenarios, write a condition that triggers the scenario. Don't write on what step this scenario is triggered. It should be written in the main scenario or alternative/exception scenario.
 
 ---
 
