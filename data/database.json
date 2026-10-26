@@ -270,5 +270,60 @@
       "projectId": "project-alpha",
       "parentId": "ad63a7d8-a001-4ab5-97ef-fedca404ae19"
     }
+  ],
+  "requirementLinkTypes": [
+    {
+      "id": "link-clarifies",
+      "name": "Уточняет",
+      "directed": true
+    },
+    {
+      "id": "link-based-on",
+      "name": "Основано на",
+      "directed": true
+    },
+    {
+      "id": "link-depends-on",
+      "name": "Зависит от",
+      "directed": true
+    },
+    {
+      "id": "link-conflicts-with",
+      "name": "Конфликтует с",
+      "directed": false
+    },
+    {
+      "id": "link-duplicates",
+      "name": "Дублирует",
+      "directed": false
+    },
+    {
+      "id": "link-related-to",
+      "name": "Связано с",
+      "directed": false
+    }
+  ],
+  "requirementLinks": [
+    {
+      "id": "3e2ab61a-0767-4e44-b118-92aeb9da4411",
+      "projectId": "project-alpha",
+      "requirementAId": "f162f1da-d5ad-4df8-a104-2a6b7d9e5cc9",
+      "requirementBId": "2e5ff490-6b5d-4ddf-bcd0-9c7b41fa6ffb",
+      "typeId": "link-related-to"
+    },
+    {
+      "id": "a7423297-5513-412a-8388-5bc418690281",
+      "projectId": "project-alpha",
+      "requirementAId": "f162f1da-d5ad-4df8-a104-2a6b7d9e5cc9",
+      "requirementBId": "924b144d-ca74-46e9-af0d-ca633e6ca2b2",
+      "typeId": "link-related-to"
+    },
+    {
+      "id": "d8de406e-c5c6-46bb-b808-1d9326a048bd",
+      "projectId": "project-alpha",
+      "requirementAId": "f162f1da-d5ad-4df8-a104-2a6b7d9e5cc9",
+      "requirementBId": "f1b3f803-3dfb-4140-9d75-9b3d6e4090e3",
+      "typeId": "link-related-to"
+    }
   ]
 }

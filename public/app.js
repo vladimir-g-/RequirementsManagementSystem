@@ -117,7 +117,7 @@ async function loadRequirements() {
   sortRequirements();
 }
 function userMenu() {
-  const adminMenu = state.user.role === 'Администратор' ? '<div class="user-submenu"><button type="button" class="user-submenu-toggle" id="admin-menu-toggle" aria-expanded="false" aria-controls="admin-submenu">Администрирование<span class="submenu-chevron" aria-hidden="true">›</span></button><div class="user-submenu-list" id="admin-submenu" hidden><button type="button" id="users-link">Пользователи и права</button><button type="button" id="prefixes-link">Префиксы требований</button></div></div>' : '';
+  const adminMenu = state.user.role === 'Администратор' ? '<div class="user-submenu"><button type="button" class="user-submenu-toggle" id="admin-menu-toggle" aria-expanded="false" aria-controls="admin-submenu">Администрирование<span class="submenu-chevron" aria-hidden="true">›</span></button><div class="user-submenu-list" id="admin-submenu" hidden><button type="button" id="users-link">Пользователи и права</button><button type="button" id="prefixes-link">Префиксы требований</button><button type="button" id="link-types-link">Типы связей</button></div></div>' : '';
   return `<details class="user-menu"><summary><span class="avatar">${esc((state.user.name || 'A')[0])}</span><span>${esc(state.user.name)}</span><span class="menu-chevron" aria-hidden="true">⌄</span></summary><div class="user-menu-list"><button type="button" id="profile-link">Профиль</button>${adminMenu}<button type="button" id="logout">Выйти</button></div></details>`;
 }
 function projectPicker() {
@@ -165,6 +165,7 @@ function bindUserMenu() {
   document.querySelector('#profile-link').onclick = () => renderProfile();
   document.querySelector('#users-link')?.addEventListener('click', () => renderUsers());
   document.querySelector('#prefixes-link')?.addEventListener('click', () => renderPrefixSettings());
+  document.querySelector('#link-types-link')?.addEventListener('click', () => renderRequirementLinkTypes());
   document.querySelector('#logout').onclick = async () => { await api('/api/auth/logout', { method: 'POST' }); state.user = null; renderLogin(); };
 }
 function bindProjectPicker() {
@@ -332,6 +333,51 @@ async function renderPrefixSettings() {
     try { await api('/api/requirement-prefixes', { method: 'PUT', body: JSON.stringify({ prefixes }) }); await renderPrefixSettings(); } catch (error) { document.querySelector('#prefix-error').textContent = error.message; }
   };
 }
+async function renderRequirementLinkTypes() {
+  const result = await api('/api/requirement-link-types');
+  app.innerHTML = `<div class="shell"><header class="topbar"><div class="topbar-start"><div class="brand">RMS<span>.</span></div>${projectPicker()}</div>${userMenu()}</header><main class="content profile-content"><div class="profile-heading"><div><p class="eyebrow">Администрирование</p><h1>Типы связей</h1><p class="page-note">Единый каталог для всех проектов. Удаление типа удалит все связи этого типа.</p></div><div class="heading-actions"><button class="clear" id="back-to-requirements">← К требованиям</button><button class="primary" id="add-link-type">+ Новый тип</button></div></div><div class="table-wrap"><table class="link-types-table"><thead><tr><th>Название</th><th>Направленность</th><th></th></tr></thead><tbody>${result.types.length ? result.types.map((item) => `<tr><td>${esc(item.name)}</td><td>${item.directed ? 'Направленная' : 'Симметричная'}</td><td><div class="actions"><button class="icon-button link-type-edit" data-id="${esc(item.id)}" title="Редактировать тип">✎</button><button class="icon-button delete link-type-delete" data-id="${esc(item.id)}" title="Удалить тип">×</button></div></td></tr>`).join('') : '<tr><td colspan="3" class="empty">Типы связей не настроены</td></tr>'}</tbody></table></div><p class="error" id="link-types-error" role="alert"></p></main></div>`;
+  bindUserMenu();
+  document.querySelector('#back-to-requirements').onclick = () => renderApp();
+  document.querySelector('#add-link-type').onclick = () => openRequirementLinkTypeModal();
+  document.querySelectorAll('.link-type-edit').forEach((button) => {
+    button.onclick = () => openRequirementLinkTypeModal(result.types.find((item) => item.id === button.dataset.id));
+  });
+  document.querySelectorAll('.link-type-delete').forEach((button) => {
+    button.onclick = async () => {
+      const type = result.types.find((item) => item.id === button.dataset.id);
+      if (!confirm(`Удалить тип «${type.name}» и все связи этого типа во всех проектах? Требования сохранятся.`)) return;
+      try {
+        const deletion = await api(`/api/requirement-link-types/${type.id}`, { method: 'DELETE' });
+        await renderRequirementLinkTypes();
+        if (deletion.removedLinks) alert(`Тип удалён. Также удалено связей: ${deletion.removedLinks}.`);
+      } catch (error) {
+        document.querySelector('#link-types-error').textContent = error.message;
+      }
+    };
+  });
+}
+function openRequirementLinkTypeModal(item = null) {
+  document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop" id="link-type-modal"><form class="modal link-type-modal" id="link-type-form"><div class="modal-header"><div><p class="eyebrow">${item ? 'Редактирование' : 'Новый тип'}</p><h2>${item ? 'Изменить тип связи' : 'Создать тип связи'}</h2></div><button type="button" class="close" id="link-type-close" aria-label="Закрыть">×</button></div><div class="field"><label for="link-type-name">Название *</label><input id="link-type-name" name="name" required value="${esc(item?.name || '')}"></div><div class="field"><label for="link-type-direction">Направленность</label><select id="link-type-direction" name="directed"><option value="true" ${item?.directed !== false ? 'selected' : ''}>Направленная</option><option value="false" ${item?.directed === false ? 'selected' : ''}>Симметричная</option></select></div><p class="error" id="link-type-form-error" role="alert"></p><div class="modal-actions"><button type="button" class="cancel" id="link-type-cancel">Отмена</button><button class="primary">${item ? 'Сохранить' : 'Создать тип'}</button></div></form></div>`);
+  const modal = document.querySelector('#link-type-modal');
+  const close = () => modal.remove();
+  document.querySelector('#link-type-close').onclick = close;
+  document.querySelector('#link-type-cancel').onclick = close;
+  document.querySelector('#link-type-form').onsubmit = async (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const body = { name: form.get('name'), directed: form.get('directed') === 'true' };
+    try {
+      await api(item ? `/api/requirement-link-types/${item.id}` : '/api/requirement-link-types', {
+        method: item ? 'PUT' : 'POST',
+        body: JSON.stringify(body)
+      });
+      close();
+      await renderRequirementLinkTypes();
+    } catch (error) {
+      document.querySelector('#link-type-form-error').textContent = error.message;
+    }
+  };
+}
 function legacyOpenUserModal(item = null) {
   const permissionLabels = { create: 'Создание требований', read: 'Просмотр требований', update: 'Изменение требований', delete: 'Удаление требований' };
   document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop" id="modal"><form class="modal" id="requirement-form"><div class="modal-header"><div><p class="eyebrow">${item ? 'Редактирование' : 'Новая запись'}</p><h2>${item ? 'Изменить требование' : 'Добавить требование'}</h2></div><button type="button" class="close" id="close">×</button></div><div class="form-grid"><div class="field"><label>Номер</label><input name="number" value="${esc(item?.number || 'Будет назначен автоматически')}" placeholder="Будет назначен автоматически" readonly></div><div class="field"><label>Краткое описание *</label><input name="description" required value="${esc(item?.description || '')}"></div><div class="field wide"><label>Детальное описание</label><div class="markdown-editor"><div class="markdown-toolbar"><button type="button" data-mark="bold" title="Жирный">B</button><button type="button" data-mark="italic" title="Курсив"><i>I</i></button><button type="button" data-mark="heading" title="Заголовок">H</button><button type="button" data-mark="bullet" title="Список">•</button><button type="button" data-mark="number" title="Нумерованный список">1.</button><button type="button" data-mark="code" title="Код">&lt;/&gt;</button><button type="button" id="preview-toggle" title="Предпросмотр">Предпросмотр</button></div><textarea id="details-markdown" name="detailsMarkdown" rows="8" placeholder="Опишите требование подробно в Markdown...">${esc(item?.detailsMarkdown || '')}</textarea><div id="markdown-preview" class="markdown-preview"></div></div></div><div class="field"><label>Тип требования *</label><select name="type" required><option value="">Выберите тип</option>${optionList(types, item?.type)}</select></div><div class="field"><label>Важность *</label><select name="priority" required><option value="">Выберите важность</option>${optionList(priorities, item?.priority)}</select></div><div class="field"><label>Сложность</label><select name="complexity"><option value="">Не указана</option>${optionList(complexities, item?.complexity)}</select></div><div class="field"><label>Статус *</label><select name="status" required>${optionList(statuses, item?.status || statuses[0])}</select></div><div class="field"><label>Номер релиза</label><input name="release" value="${esc(item?.release || '')}" placeholder="Например, 2.1"></div></div><p class="error" id="form-error"></p><div class="modal-actions"><button type="button" class="cancel" id="cancel">Отмена</button><button class="primary">${item ? 'Сохранить изменения' : 'Создать требование'}</button></div></form></div>`);
@@ -425,7 +471,7 @@ function initSplitter() {
 
 function bindGroups() {
   document.querySelector('#all-groups').onclick = async () => { state.selectedGroupId = ''; await loadRequirements(); renderApp(); };
-  document.querySelector('#add-group').onclick = () => openGroupModal();
+  document.querySelector('#add-group')?.addEventListener('click', () => openGroupModal());
   document.querySelectorAll('.group-select').forEach((button) => { button.onclick = async () => { state.selectedGroupId = button.dataset.groupId; await loadRequirements(); renderApp(); }; });
   document.querySelectorAll('.group-edit').forEach((button) => { button.onclick = () => openGroupModal(state.groups.find((group) => group.id === button.dataset.id)); });
   document.querySelectorAll('.group-add-child').forEach((button) => { button.onclick = () => openGroupModal(null, button.dataset.id); });
@@ -433,7 +479,7 @@ function bindGroups() {
   initSplitter();
 }
 function renderApp() {
-  app.innerHTML = `<div class="shell"><header class="topbar"><div class="topbar-start"><div class="brand">RMS<span>.</span></div>${projectPicker()}</div>${userMenu()}</header><main class="content"><div class="heading"><div><h1>Требования</h1><p class="page-note">Группируйте требования в иерархию без ограничения вложенности.</p></div></div><div class="toolbar"><div class="field project-field"><label for="search">Поиск</label><input id="search" placeholder="Номер, описание или тип" value="${esc(state.filters.search)}"></div>${multiFilter('type', 'Тип', types)}${multiFilter('priority', 'Важность', priorities)}${multiFilter('complexity', 'Сложность', complexities)}${multiFilter('status', 'Статус', statuses)}${multiFilter('release', 'Релиз', state.releases)}<button class="clear" id="clear">Сбросить</button>${can('create') ? '<button class="primary" id="add">+ Новое требование</button>' : ''}</div><div class="requirements-layout"><aside class="groups-panel"><div class="groups-heading"><strong>Группы</strong><div class="groups-heading-actions">${can('create') ? '<button class="link-button" id="add-group">+ Новая группа</button>' : ''}<button class="link-button" id="all-groups">Все</button></div></div><ul class="group-tree">${groupTree()}</ul>${!state.groups.length ? '<p class="muted">Групп пока нет</p>' : ''}</aside><div class="splitter" id="splitter"></div><div class="table-wrap"><table><thead><tr><th>Номер</th><th>Краткое описание</th><th>Группа</th><th>Тип</th><th>Важность</th><th>Сложность</th><th>Статус</th><th>Релиз</th><th></th></tr></thead><tbody>${state.requirements.length ? state.requirements.map((item) => `<tr><td>${can('update') ? `<button class="requirement-number edit" data-id="${item.id}" title="Редактировать требование">${esc(item.number)}</button>` : esc(item.number)}</td><td class="description">${esc(item.description)}</td><td>${esc(state.groups.find((group) => group.id === item.groupId)?.name || 'Без группы')}</td><td>${esc(requirementTypeName(item.type))}</td><td>${badge(item.priority)}</td><td>${badge(item.complexity)}</td><td>${badge(item.status)}</td><td>${esc(item.release)}</td><td><div class="actions">${can('update') ? `<button class="icon-button edit" data-id="${item.id}" title="Редактировать">✎</button>` : ''}${can('delete') ? `<button class="icon-button delete-requirement" data-id="${item.id}" title="Удалить">×</button>` : ''}</div></td></tr>`).join('') : `<tr><td colspan="9" class="empty">В выбранной области нет требований</td></tr>`}</tbody></table></div></div></main></div>`;
+  app.innerHTML = `<div class="shell"><header class="topbar"><div class="topbar-start"><div class="brand">RMS<span>.</span></div>${projectPicker()}</div>${userMenu()}</header><main class="content"><div class="heading"><div><h1>Требования</h1><p class="page-note">Группируйте требования в иерархию без ограничения вложенности.</p></div></div><div class="toolbar"><div class="field project-field"><label for="search">Поиск</label><input id="search" placeholder="Номер, описание или тип" value="${esc(state.filters.search)}"></div>${multiFilter('type', 'Тип', types)}${multiFilter('priority', 'Важность', priorities)}${multiFilter('complexity', 'Сложность', complexities)}${multiFilter('status', 'Статус', statuses)}${multiFilter('release', 'Релиз', state.releases)}<button class="clear" id="clear">Сбросить</button>${can('create') ? '<button class="primary" id="add">+ Новое требование</button>' : ''}</div><div class="requirements-layout"><aside class="groups-panel"><div class="groups-heading"><strong>Группы</strong><div class="groups-heading-actions">${can('create') ? '<button class="link-button" id="add-group">+ Новая группа</button>' : ''}<button class="link-button" id="all-groups">Все</button></div></div><ul class="group-tree">${groupTree()}</ul>${!state.groups.length ? '<p class="muted">Групп пока нет</p>' : ''}</aside><div class="splitter" id="splitter"></div><div class="table-wrap"><table><thead><tr><th>Номер</th><th>Краткое описание</th><th>Группа</th><th>Тип</th><th>Важность</th><th>Сложность</th><th>Статус</th><th>Релиз</th><th></th></tr></thead><tbody>${state.requirements.length ? state.requirements.map((item) => `<tr><td>${can('read') ? `<button class="requirement-number ${can('update') ? 'edit' : 'view'}" data-id="${esc(item.id)}" title="${can('update') ? 'Редактировать требование' : 'Просмотреть требование'}">${esc(item.number)}</button>` : esc(item.number)}</td><td class="description">${esc(item.description)}</td><td>${esc(state.groups.find((group) => group.id === item.groupId)?.name || 'Без группы')}</td><td>${esc(requirementTypeName(item.type))}</td><td>${badge(item.priority)}</td><td>${badge(item.complexity)}</td><td>${badge(item.status)}</td><td>${esc(item.release)}</td><td><div class="actions">${can('update') ? `<button class="icon-button edit" data-id="${esc(item.id)}" title="Редактировать">✎</button>` : ''}${can('delete') ? `<button class="icon-button delete-requirement" data-id="${esc(item.id)}" title="Удалить">×</button>` : ''}</div></td></tr>`).join('') : `<tr><td colspan="9" class="empty">В выбранной области нет требований</td></tr>`}</tbody></table></div></div></main></div>`;
   initRequirementTable();
   bindUserMenu();
   bindProjectPicker();
@@ -447,8 +493,8 @@ function renderApp() {
   });
   document.querySelector('#search').oninput = debounce(async (event) => { state.filters.search = event.target.value; await refresh(); }, 250);
   document.querySelector('#clear').onclick = async () => { filtersDirty = false; state.filters.search = ''; state.filters.type = []; state.filters.priority = []; state.filters.status = []; state.filters.complexity = []; state.filters.release = []; await refresh(); };
-  document.querySelector('#add').onclick = () => openModal();
-  document.querySelectorAll('.edit').forEach((button) => { button.onclick = () => openModal(state.requirements.find((item) => item.id === button.dataset.id)); });
+  document.querySelector('#add')?.addEventListener('click', () => openModal());
+  document.querySelectorAll('.edit, .view').forEach((button) => { button.onclick = () => openModal(state.requirements.find((item) => item.id === button.dataset.id)); });
   document.querySelectorAll('.delete-requirement').forEach((button) => { button.onclick = () => deleteRequirement(button.dataset.id); });
   const sortKeys = ['number', 'description', 'type', 'priority', 'complexity', 'status', 'release'];
   document.querySelectorAll('th').forEach((header, index) => {
@@ -469,9 +515,114 @@ function renderApp() {
 }
 async function refresh() { await loadRequirements(); renderApp(); }
 function debounce(callback, delay) { let timer; return (...args) => { clearTimeout(timer); timer = setTimeout(() => callback(...args), delay); }; }
+function requirementLinksMarkup(item, links, linkTypes, manageLinks) {
+  const rows = links.map((link) => {
+    const other = link.requirementAId === item.id ? link.requirementB : link.requirementA;
+    const type = link.type;
+    const relationship = type?.directed
+      ? `<span class="related-link-direction">A (${esc(link.requirementA?.number || '—')}) → B (${esc(link.requirementB?.number || '—')})</span>`
+      : '';
+    return `<tr><td>${esc(other?.number || 'Требование недоступно')}</td><td>${esc(other?.description || '')}</td><td><span>${esc(type?.name || 'Тип удалён')}</span>${relationship}</td><td>${manageLinks ? `<button type="button" class="icon-button delete related-link-delete" data-link-id="${esc(link.id)}" title="Удалить связь" aria-label="Удалить связь">×</button>` : ''}</td></tr>`;
+  }).join('');
+  const creationControls = manageLinks
+    ? `<div class="related-link-create"><div class="field"><label for="related-requirement-search">Требование</label><input id="related-requirement-search" autocomplete="off" placeholder="Найти по номеру или описанию"><div id="link-search-results" class="link-search-results" role="listbox"></div></div><div class="field"><label for="related-link-type">Тип связи</label><select id="related-link-type">${linkTypes.length ? optionList(linkTypes, linkTypes[0].id) : '<option value="">Типы связей не настроены</option>'}</select></div><button type="button" class="primary" id="add-related-link" disabled>Добавить связь</button></div>`
+    : '';
+  return `<h3 id="related-requirements-title">Связи</h3>${creationControls}<p class="error related-link-error" id="related-link-error" role="alert"></p><div class="related-requirements-table-wrap"><table class="related-requirements-table"><colgroup><col class="related-number-column"><col><col class="related-type-column"><col class="related-action-column"></colgroup><thead><tr><th>Номер</th><th>Краткое описание</th><th>Тип связи</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="related-requirements-empty">Связанные требования не добавлены</td></tr>'}</tbody></table></div>`;
+}
+async function bindRequirementLinks(item) {
+  if (!item) return;
+  const section = document.querySelector('#related-requirements');
+  const manageLinks = can('read') && can('update');
+  let links = [];
+  let linkTypes = [];
+  let selectedRequirement = null;
+  let searchSequence = 0;
+  const render = () => {
+    section.innerHTML = requirementLinksMarkup(item, links, linkTypes, manageLinks);
+    if (!manageLinks) return;
+    const searchInput = document.querySelector('#related-requirement-search');
+    const addButton = document.querySelector('#add-related-link');
+    const typeSelect = document.querySelector('#related-link-type');
+    const searchResults = document.querySelector('#link-search-results');
+    const error = document.querySelector('#related-link-error');
+    const refreshAddButton = () => { addButton.disabled = !selectedRequirement || !typeSelect.value; };
+    const search = debounce(async () => {
+      const query = searchInput.value.trim();
+      const sequence = ++searchSequence;
+      selectedRequirement = null;
+      refreshAddButton();
+      searchResults.innerHTML = '';
+      if (!query) return;
+      try {
+        const params = new URLSearchParams({ projectId: item.projectId, excludeId: item.id, search: query });
+        const result = await api(`/api/requirements/search?${params}`);
+        if (sequence !== searchSequence || searchInput.value.trim() !== query) return;
+        const alreadyLinked = new Set(links.flatMap((link) => [link.requirementAId, link.requirementBId]));
+        const results = result.requirements.filter((requirement) => !alreadyLinked.has(requirement.id));
+        searchResults.innerHTML = results.length
+          ? results.map((requirement) => `<button type="button" class="link-search-result" role="option" data-id="${esc(requirement.id)}">${esc(requirement.number)} — ${esc(requirement.description)}</button>`).join('')
+          : '<span class="muted">Подходящих требований не найдено</span>';
+        searchResults.querySelectorAll('.link-search-result').forEach((button) => {
+          button.onclick = () => {
+            selectedRequirement = result.requirements.find((requirement) => requirement.id === button.dataset.id);
+            searchInput.value = selectedRequirement ? `${selectedRequirement.number} — ${selectedRequirement.description}` : '';
+            searchResults.innerHTML = '';
+            refreshAddButton();
+          };
+        });
+      } catch (requestError) {
+        if (sequence === searchSequence) error.textContent = requestError.message;
+      }
+    }, 250);
+    searchInput.oninput = () => { error.textContent = ''; search(); };
+    typeSelect.onchange = refreshAddButton;
+    addButton.onclick = async () => {
+      if (!selectedRequirement || !typeSelect.value) return;
+      addButton.disabled = true;
+      try {
+        await api('/api/requirement-links', {
+          method: 'POST',
+          body: JSON.stringify({ requirementAId: item.id, requirementBId: selectedRequirement.id, typeId: typeSelect.value })
+        });
+        selectedRequirement = null;
+        searchInput.value = '';
+        searchResults.innerHTML = '';
+        await load();
+      } catch (requestError) {
+        error.textContent = requestError.message;
+        refreshAddButton();
+      }
+    };
+    section.querySelectorAll('.related-link-delete').forEach((button) => {
+      button.onclick = async () => {
+        if (!confirm('Удалить связь между требованиями?')) return;
+        try {
+          await api(`/api/requirement-links/${button.dataset.linkId}`, { method: 'DELETE' });
+          await load();
+        } catch (requestError) {
+          error.textContent = requestError.message;
+        }
+      };
+    });
+  };
+  const load = async () => {
+    try {
+      const requests = [api(`/api/requirements/${item.id}/links`)];
+      if (manageLinks) requests.push(api(`/api/requirements/${item.id}/link-options`));
+      const [linkResult, typeResult] = await Promise.all(requests);
+      links = linkResult.links;
+      linkTypes = typeResult?.types || [];
+      render();
+    } catch (error) {
+      section.innerHTML = `<h3 id="related-requirements-title">Связи</h3><p class="error" role="alert">${esc(error.message)}</p>`;
+    }
+  };
+  await load();
+}
 function openModal(item = null) {
+  const readOnly = Boolean(item && !can('update'));
   document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop" id="modal"><form class="modal" id="requirement-form">
-    <div class="modal-header"><div><p class="eyebrow">${item ? 'Редактирование' : 'Новая запись'}</p><h2>${item ? 'Изменить требование' : 'Добавить требование'}</h2></div><button type="button" class="close" id="close">×</button></div>
+    <div class="modal-header"><div><p class="eyebrow">${readOnly ? 'Просмотр' : item ? 'Редактирование' : 'Новая запись'}</p><h2>${readOnly ? 'Карточка требования' : item ? 'Изменить требование' : 'Добавить требование'}</h2></div><button type="button" class="close" id="close" aria-label="Закрыть">×</button></div>
     <div class="requirement-top-fields">
       <div class="field"><label>Номер</label><input name="number" value="${esc(item?.number || '')}" placeholder="Автоматически"></div>
       <div class="field"><label>Краткое описание *</label><input name="description" required value="${esc(item?.description || '')}"></div>
@@ -479,9 +630,9 @@ function openModal(item = null) {
     <div class="requirement-card-content">
       <div class="requirement-description-column">
         <div class="field"><label>Детальное описание</label><div class="markdown-editor"><div class="markdown-toolbar"><button type="button" data-mark="bold" title="Жирный">B</button><button type="button" data-mark="italic" title="Курсив"><i>I</i></button><button type="button" data-mark="heading" title="Заголовок">H</button><button type="button" data-mark="bullet" title="Список">•</button><button type="button" data-mark="number" title="Нумерованный список">1.</button><button type="button" data-mark="code" title="Код">&lt;/&gt;</button><button type="button" id="preview-toggle" title="Предпросмотр">Предпросмотр</button></div><textarea id="details-markdown" name="detailsMarkdown" rows="8" placeholder="Опишите требование подробно в Markdown...">${esc(item?.detailsMarkdown || '')}</textarea><div id="markdown-preview" class="markdown-preview"></div></div></div>
-        <section class="related-requirements" aria-labelledby="related-requirements-title">
-          <h3 id="related-requirements-title">Связанные требования</h3>
-          <div class="related-requirements-table-wrap"><table class="related-requirements-table"><colgroup><col class="related-number-column"><col><col class="related-type-column"></colgroup><thead><tr><th>Номер</th><th>Краткое описание</th><th>Тип</th></tr></thead><tbody><tr><td colspan="3" class="related-requirements-empty">Связанные требования не добавлены</td></tr></tbody></table></div>
+        <section id="related-requirements" class="related-requirements" aria-labelledby="related-requirements-title">
+          <h3 id="related-requirements-title">Связи</h3>
+          <p class="muted">Загрузка связей…</p>
         </section>
       </div>
       <div class="requirement-meta">
@@ -493,10 +644,11 @@ function openModal(item = null) {
         <div class="field"><label>Группа</label><select name="groupId">${groupOptions(item?.groupId || state.selectedGroupId)}</select></div>
       </div>
     </div>
-    <p class="error" id="form-error"></p><div class="modal-actions"><button type="button" class="cancel" id="cancel">Отмена</button><button class="primary">${item ? 'Сохранить изменения' : 'Создать требование'}</button></div>
+    <p class="error" id="form-error"></p><div class="modal-actions"><button type="button" class="cancel" id="cancel">${readOnly ? 'Закрыть' : 'Отмена'}</button>${readOnly ? '' : `<button class="primary">${item ? 'Сохранить изменения' : 'Создать требование'}</button>`}</div>
   </form></div>`);
   document.querySelector('#requirement-form .modal-header h2').remove();
   const modal = document.querySelector('#modal'); const close = () => modal.remove(); document.querySelector('#close').onclick = close; document.querySelector('#cancel').onclick = close; document.querySelector('input[name="number"]').readOnly = true;
+  if (readOnly) document.querySelectorAll('#requirement-form input, #requirement-form select, #requirement-form textarea, #requirement-form button:not(#close):not(#cancel)').forEach((control) => { control.disabled = true; });
   const editor = document.querySelector('#details-markdown'); const preview = document.querySelector('#markdown-preview'); const updatePreview = () => { preview.innerHTML = markdownToHtml(editor.value); };
   const previewToggle = document.querySelector('#preview-toggle');
   const modeSwitch = document.createElement('div');
@@ -528,6 +680,7 @@ function openModal(item = null) {
     };
   });
   document.querySelector('#requirement-form').onsubmit = async (event) => { event.preventDefault(); const body = Object.fromEntries(new FormData(event.currentTarget)); body.projectId = item?.projectId || state.filters.projectId; try { await api(item ? `/api/requirements/${item.id}` : '/api/requirements', { method: item ? 'PUT' : 'POST', body: JSON.stringify(body) }); close(); await refresh(); } catch (error) { document.querySelector('#form-error').textContent = error.message; } };
+  if (item) bindRequirementLinks(item);
 }
 async function deleteRequirement(id) { if (!confirm('Удалить это требование?')) return; await api(`/api/requirements/${id}`, { method: 'DELETE' }); await refresh(); }
 

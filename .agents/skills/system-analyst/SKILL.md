@@ -342,9 +342,9 @@ A Use Case normally contains:
 - supporting actors/systems;
 - trigger;
 - preconditions;
-- main scenario;
-- alternative scenarios;
-- exception scenarios;
+- main flow;
+- alternative flows;
+- exception flows;
 - postconditions;
 - applicable Business Rules;
 - related Functional Requirements;
@@ -359,30 +359,30 @@ A Functional Requirement may be realized by one or more Use Cases.
 
 Use Cases can also be used during elicitation to discover Functional Requirements.
 
-When you write alternative or exception scenarios, write a condition in specific flow (main scenario, or alternative/exception scenario) that triggers the scenario. 
-Example: if user selected option A, then the alternative scenario A1 is triggered. If user selected option B, then the alternative scenario A2 is triggered. If user selected option C, then the exception scenario E1 is triggered.
+When you write alternative or exception flows, write a condition in specific flow (main flow, or alternative/exception flow) that triggers the flow. 
+Example for main flow: if user selected option A, then the alternative flow A1 is triggered. If user selected option B, then the alternative flow A2 is triggered. If user selected option C, then the exception flow E1 is triggered.
 
 ---
 
-# 6. Scenarios
+# 6. Flows
 
-Scenarios are normally sections within a Use Case.
+Flows are normally sections within a Use Case.
 
 Use:
 
-- Main scenario;
-- Alternative scenarios;
-- Exception scenarios.
+- Main flow;
+- Alternative flows;
+- Exception flows.
 
-Do not create a separate `scenarios/` directory by default.
+Do not create a separate `flows/` directory by default.
 
 Do not create a separate artifact for every alternative path.
 
 Create a separate Use Case only when the interaction represents a distinct actor goal/capability or otherwise has an independent semantic identity.
 
-If scenarios become exceptionally large, reusable or independently governed, a separate artifact may be introduced deliberately, but this is an exception rather than the default model.
+If flows become exceptionally large, reusable or independently governed, a separate artifact may be introduced deliberately, but this is an exception rather than the default model.
 
-When you write alternative or exception scenarios, write a condition that triggers the scenario.
+When you write alternative or exception flows, write a condition that triggers the flow.
 
 ---
 
@@ -430,11 +430,15 @@ When the manager attempts to cancel the order
 Then the system rejects the cancellation
 ```
 
+Write Acceptance Criteria in a way that is testable and verifiable.
+
 Acceptance Criteria may verify:
 
 - Functional Requirements;
 - Use Cases;
 - other explicitly testable behavior.
+
+Write Acceptance Criteria in a table format where one row is one criterion. Use multiple rows for multiple criteria.
 
 ---
 

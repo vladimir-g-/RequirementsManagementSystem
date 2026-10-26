@@ -6,17 +6,9 @@
 
 ## Criteria
 
-### Given
-
-{{Initial condition}}
-
-### When
-
-{{Action}}
-
-### Then
-
-{{Expected result}}
+| # | Given | When | Then |
+|---|---|---|---|
+| {{Номер строки}} | {{Initial condition}} | {{Action}} | {{Expected result}} |
 
 ## Status
 

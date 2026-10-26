@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
   title: Requirements Management System API
-  description: API серверной части системы управления требованиями.
-  version: 1.0.0
+  description: API серверной части системы управления требованиями, включая каталог типов связей и связи требований.
+  version: 1.1.0
   license:
     name: Proprietary
 servers:
@@ -21,6 +21,8 @@ tags:
     description: Требования
   - name: Requirement prefixes
     description: Префиксы номеров требований (только администратор)
+  - name: Requirement links
+    description: Общий каталог типов и связи между требованиями
   - name: Users
     description: Пользователи (только администратор)
 paths:
@@ -355,6 +357,143 @@ paths:
         '403':
           $ref: '#/components/responses/AdminRequired'
 
+  /api/requirement-link-types:
+    get:
+      tags: [Requirement links]
+      summary: Получить каталог типов связей
+      description: Доступно только пользователю с системной ролью «Администратор».
+      operationId: listRequirementLinkTypes
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Единый для всех проектов каталог типов связей
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [types]
+                properties:
+                  types:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RequirementLinkType'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AdminRequired'
+    post:
+      tags: [Requirement links]
+      summary: Создать тип связи
+      description: Доступно только администратору. Название должно быть уникальным без учёта регистра.
+      operationId: createRequirementLinkType
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequirementLinkTypeWrite'
+      responses:
+        '201':
+          description: Тип связи создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementLinkTypeResponse'
+        '400':
+          description: Некорректное или неполное тело запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AdminRequired'
+        '409':
+          description: Тип связи с таким названием уже существует
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/requirement-link-types/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Идентификатор типа связи
+        schema:
+          type: string
+    put:
+      tags: [Requirement links]
+      summary: Изменить тип связи
+      description: Изменение направленности применяется ко всем существующим связям данного типа. Доступно только администратору.
+      operationId: updateRequirementLinkType
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequirementLinkTypeWrite'
+      responses:
+        '200':
+          description: Тип связи изменён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementLinkTypeResponse'
+        '400':
+          description: Некорректное или неполное тело запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AdminRequired'
+        '404':
+          description: Тип связи не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Тип связи с таким названием уже существует
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags: [Requirement links]
+      summary: Удалить тип связи
+      description: Удаляет также все связи этого типа во всех проектах, но не удаляет требования. Доступно только администратору.
+      operationId: deleteRequirementLinkType
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Тип связи удалён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletedRequirementLinkTypeResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AdminRequired'
+        '404':
+          description: Тип связи не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /api/users:
     get:
       tags: [Users]
@@ -533,6 +672,203 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /api/requirements/search:
+    get:
+      tags: [Requirement links]
+      summary: Найти требование для связывания
+      description: Поиск ограничен проектом исходного требования, исключает само исходное требование и возвращает не более 20 совпадений. Требуются права read и update.
+      operationId: searchRequirementsForLink
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: projectId
+          in: query
+          required: true
+          description: Проект исходного требования
+          schema:
+            type: string
+        - name: excludeId
+          in: query
+          required: true
+          description: Идентификатор исходного требования, исключаемого из результатов
+          schema:
+            type: string
+        - name: search
+          in: query
+          required: true
+          description: Поисковая строка; поиск выполняется по номеру, описанию и типу требования
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        '200':
+          description: Найденные требования того же проекта, максимум 20
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementLinkSearchResponse'
+        '400':
+          description: Не указан поисковый запрос или исходное требование не соответствует проекту
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Для поиска нужны права read и update в проекте
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/requirements/{id}/link-options:
+    get:
+      tags: [Requirement links]
+      summary: Получить доступные типы связей для требования
+      description: Требуются права read и update в проекте требования.
+      operationId: getRequirementLinkOptions
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequirementId'
+      responses:
+        '200':
+          description: Каталог типов, доступных при создании связи
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [types]
+                properties:
+                  types:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RequirementLinkType'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Для создания связи нужны права read и update
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/RequirementNotFound'
+
+  /api/requirements/{id}/links:
+    get:
+      tags: [Requirement links]
+      summary: Получить связи требования
+      description: Требуется право read в проекте требования. Направленные связи возвращают стороны A и B в исходном направлении независимо от карточки, с которой запрошен список.
+      operationId: listRequirementLinks
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequirementId'
+      responses:
+        '200':
+          description: Связи требования с данными типа и обеих сторон
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementLinksResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Нет права просматривать связи требований в этом проекте
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/RequirementNotFound'
+
+  /api/requirement-links:
+    post:
+      tags: [Requirement links]
+      summary: Создать связь между требованиями
+      description: Требуются права read и update. Требования должны быть разными и принадлежать одному проекту. Для направленного типа requirementAId — исходное требование, с карточки которого начата операция; requirementBId — выбранное требование. Между одной парой допускается только одна связь независимо от типа и направления.
+      operationId: createRequirementLink
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequirementLinkWrite'
+      responses:
+        '201':
+          description: Связь создана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementLinkResponse'
+        '400':
+          description: Самосвязь, разные проекты или неизвестный тип связи
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Для создания связи нужны права read и update в проекте
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Одно из требований не найдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Эта пара требований уже связана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/requirement-links/{id}:
+    delete:
+      tags: [Requirement links]
+      summary: Удалить связь между требованиями
+      description: Требуются права read и update в проекте. Удаляются только связь, сами требования сохраняются.
+      operationId: deleteRequirementLink
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Идентификатор связи
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Связь удалена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Для удаления связи нужны права read и update в проекте
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Связь не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /api/requirements/{id}:
     parameters:
       - $ref: '#/components/parameters/RequirementId'
@@ -574,6 +910,7 @@ paths:
     delete:
       tags: [Requirements]
       summary: Удалить требование
+      description: При удалении требования сервер также удаляет все его связи, не удаляя другие связанные требования.
       operationId: deleteRequirement
       security:
         - sessionCookie: []
@@ -940,6 +1277,148 @@ components:
       properties:
         requirement:
           $ref: '#/components/schemas/Requirement'
+    RequirementLinkType:
+      type: object
+      required: [id, name, directed]
+      properties:
+        id:
+          type: string
+          description: Постоянный идентификатор типа связи
+        name:
+          type: string
+          description: Название типа связи
+        directed:
+          type: boolean
+          description: true для направленного типа, false для симметричного
+      additionalProperties: false
+    RequirementLinkTypeWrite:
+      type: object
+      required: [name, directed]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: Название типа; сервер удаляет пробелы по краям и запрещает дубликаты без учёта регистра
+        directed:
+          type: boolean
+      additionalProperties: false
+    RequirementLinkTypeResponse:
+      type: object
+      required: [type]
+      properties:
+        type:
+          $ref: '#/components/schemas/RequirementLinkType'
+    DeletedRequirementLinkTypeResponse:
+      type: object
+      required: [ok, removedLinks]
+      properties:
+        ok:
+          type: boolean
+          enum: [true]
+        removedLinks:
+          type: integer
+          minimum: 0
+          description: Количество удалённых связей этого типа
+      additionalProperties: false
+    RequirementLinkWrite:
+      type: object
+      required: [requirementAId, requirementBId, typeId]
+      properties:
+        requirementAId:
+          type: string
+          description: Исходное требование, с карточки которого начато создание связи
+        requirementBId:
+          type: string
+          description: Другое требование, выбранное пользователем
+        typeId:
+          type: string
+          description: Идентификатор типа из общего каталога типов связей
+      additionalProperties: false
+    RequirementLinkRequirement:
+      type: object
+      description: Данные требования, включённые в представление связи
+      required: [id, number, description, type]
+      properties:
+        id:
+          type: string
+        number:
+          type: string
+        description:
+          type: string
+        type:
+          $ref: '#/components/schemas/RequirementTypeId'
+      additionalProperties: true
+    RequirementLink:
+      type: object
+      required: [id, projectId, requirementAId, requirementBId, typeId, type, requirementA, requirementB]
+      properties:
+        id:
+          type: string
+        projectId:
+          type: string
+        requirementAId:
+          type: string
+          description: Исходное требование направленной связи
+        requirementBId:
+          type: string
+          description: Целевое требование направленной связи
+        typeId:
+          type: string
+        type:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/RequirementLinkType'
+        requirementA:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/RequirementLinkRequirement'
+        requirementB:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/RequirementLinkRequirement'
+      additionalProperties: false
+    RequirementLinksResponse:
+      type: object
+      required: [links]
+      properties:
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequirementLink'
+      additionalProperties: false
+    RequirementLinkResponse:
+      type: object
+      required: [link]
+      properties:
+        link:
+          $ref: '#/components/schemas/RequirementLink'
+      additionalProperties: false
+    RequirementLinkSearchResult:
+      type: object
+      required: [id, number, description, type]
+      properties:
+        id:
+          type: string
+        number:
+          type: string
+        description:
+          type: string
+        type:
+          $ref: '#/components/schemas/RequirementTypeId'
+      additionalProperties: false
+    RequirementLinkSearchResponse:
+      type: object
+      required: [requirements]
+      properties:
+        requirements:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/RequirementLinkSearchResult'
+      additionalProperties: false
     UserResponse:
       type: object
       required: [user]

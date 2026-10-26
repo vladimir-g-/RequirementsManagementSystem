@@ -215,13 +215,28 @@ td:first-child { color: var(--teal); }
 .form-grid .wide { grid-column: 1 / -1; }
 .related-requirements { margin-top: 24px; }
 .related-requirements h3 { margin: 0 0 10px; }
+.related-link-create { display: grid; grid-template-columns: minmax(0, 1fr) minmax(150px, .7fr) auto; align-items: end; gap: 10px; margin-bottom: 14px; }
+.related-link-create .field { position: relative; min-width: 0; margin: 0; }
+.related-link-create .field input, .related-link-create .field select, .related-link-create .primary { height: 42px; min-height: 42px; }
+.related-link-create .primary { white-space: nowrap; }
+.related-link-create .primary:disabled { background: #b8c9c6; cursor: not-allowed; transform: none; }
+.link-search-results { position: absolute; top: calc(100% + 2px); left: 0; right: 0; display: grid; max-height: 190px; overflow-y: auto; border: 1px solid var(--line); border-radius: 7px; background: white; box-shadow: var(--shadow); z-index: 5; }
+.link-search-results:empty { display: none; }
+.link-search-results > .muted { padding: 10px; }
+.link-search-result { border: 0; border-bottom: 1px solid var(--line); background: white; color: var(--ink); padding: 9px 11px; text-align: left; }
+.link-search-result:hover, .link-search-result:focus-visible { background: #eef6f4; color: var(--teal); outline: none; }
 .related-requirements-table-wrap { width: 100%; min-width: 0; overflow-x: hidden; border: 1px solid var(--line); border-radius: 7px; }
 .related-requirements-table { width: 100%; max-width: 100%; min-width: 0; table-layout: fixed; border-collapse: collapse; text-align: left; }
-.related-number-column, .related-type-column { width: 18%; }
+.related-number-column { width: 13%; }
+.related-type-column { width: 22%; }
+.related-action-column { width: 40px; }
+.related-link-direction { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
 .related-requirements-table th, .related-requirements-table td { min-width: 0; overflow-wrap: anywhere; }
 .related-requirements-table th { padding: 9px 10px; background: #fbfcfc; color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; white-space: normal; }
 .related-requirements-table td { padding: 11px 10px; }
 .related-requirements-empty { color: var(--muted); text-align: center; }
+.link-types-table { min-width: 560px; }
+.link-type-modal { width: min(560px, 100%); }
 .modal-actions { display: flex; justify-content: end; gap: 10px; margin-top: 10px; }
 .cancel { border: 1px solid var(--line); border-radius: 7px; padding: 12px 18px; background: white; color: var(--muted); }
 .user-modal { width: min(760px, 100%); }
@@ -251,4 +266,4 @@ td:first-child { color: var(--teal); }
 .muted { color: var(--muted); }
 @media (max-width: 780px) { .user-submenu.open > .user-submenu-list:not([hidden]) { position: static; min-width: 0; margin: 0 6px 4px 12px; padding-left: 7px; border: 0; border-left: 1px solid var(--line); border-radius: 0; box-shadow: none; } }
 @media (max-width: 780px) { .auth-shell { grid-template-columns: 1fr; } .auth-visual { min-height: 260px; padding: 28px; } .auth-visual h1 { font-size: 40px; } .auth-visual p, .auth-footer { display: none; } .topbar { height: auto; align-items: start; padding: 16px 20px; } .topbar-start { align-items: start; flex-direction: column; gap: 12px; } .topbar-project { min-width: 0; } .topbar-project label { display: block; margin: 0 0 6px; } .topbar-project select { width: min(260px, 48vw); } .content { padding: 30px 18px; } .heading, .profile-heading { align-items: start; flex-direction: column; } .project-picker { width: 100%; } .toolbar { align-items: stretch; flex-direction: column; } .toolbar .field { width: 100%; } .toolbar .project-field { max-width: none; } .requirements-layout { grid-template-columns: 1fr; } .profile-card { align-items: start; flex-direction: column; } .profile-details { grid-template-columns: 1fr; gap: 16px; } .form-grid { grid-template-columns: 1fr; } .form-grid > .field:nth-child(1), .form-grid > .field:nth-child(2) { grid-column: auto; } .form-grid .wide { grid-column: auto; } }
-@media (max-width: 700px) { .requirement-top-fields, .requirement-card-content { grid-template-columns: 1fr; } }
+@media (max-width: 700px) { .requirement-top-fields, .requirement-card-content { grid-template-columns: 1fr; } .related-link-create { grid-template-columns: 1fr; } }
