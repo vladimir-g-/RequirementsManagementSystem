@@ -348,7 +348,6 @@ A Use Case normally contains:
 - postconditions;
 - applicable Business Rules;
 - related Functional Requirements;
-- relevant Acceptance Criteria;
 - Open Questions where applicable.
 
 A Use Case is not automatically a Functional Requirement.
@@ -358,9 +357,6 @@ A Use Case may realize one or more Functional Requirements.
 A Functional Requirement may be realized by one or more Use Cases.
 
 Use Cases can also be used during elicitation to discover Functional Requirements.
-
-When you write alternative or exception flows, write a condition in specific flow (main flow, or alternative/exception flow) that triggers the flow. 
-Example for main flow: if user selected option A, then the alternative flow A1 is triggered. If user selected option B, then the alternative flow A2 is triggered. If user selected option C, then the exception flow E1 is triggered.
 
 ---
 
@@ -382,7 +378,17 @@ Create a separate Use Case only when the interaction represents a distinct actor
 
 If flows become exceptionally large, reusable or independently governed, a separate artifact may be introduced deliberately, but this is an exception rather than the default model.
 
-When you write alternative or exception flows, write a condition that triggers the flow.
+When you describe flow and interactions, describe all validations that apply.
+
+If any validation fails, describe which validation failed and which exception or alternative flow was triggered.
+
+Any user input that is validated should be described in the flow, including the validation rules and the expected behavior when validation fails.
+
+When you describe a flow, describe the expected system behavior, including any changes to the system state.
+
+Do not write in alternative and exceptional flow, as a first item, a phrase like "this flow is executed if ...". Instead, describe the triggering condition in the flow step that causes the alternative or exceptional flow to be executed.
+
+Any alternatrive or exceptional flow can trigger another alternative or exceptional flow. In that case, describe the triggering condition in the flow step that causes the second alternative or exceptional flow to be executed.
 
 ---
 
@@ -435,7 +441,6 @@ Write Acceptance Criteria in a way that is testable and verifiable.
 Acceptance Criteria may verify:
 
 - Functional Requirements;
-- Use Cases;
 - other explicitly testable behavior.
 
 Write Acceptance Criteria in a table format where one row is one criterion. Use multiple rows for multiple criteria.
