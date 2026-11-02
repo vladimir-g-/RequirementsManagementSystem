@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -33,8 +33,9 @@ const requirements = [
 async function createTestServer(t) {
   const directory = mkdtempSync(join(tmpdir(), 'rms-requirement-links-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const dataFile = join(directory, 'database.json');
   const passwordHash = createHash('sha256').update('test-password').digest('hex');
-  const store = createStore(join(directory, 'database.json'), {
+  const store = createStore(dataFile, {
     users: [
       { id: 'admin', username: 'admin', passwordHash, name: 'Admin', role: 'Администратор', projectIds: [], permissions: { create: true, read: true, update: true, delete: true } }
     ],
@@ -43,6 +44,8 @@ async function createTestServer(t) {
   const auth = createAuth(store);
   store.data.users.push(
     { id: 'editor', username: 'editor', passwordHash, name: 'Editor', role: 'Пользователь', projectIds: ['project-one'], permissions: { create: true, read: true, update: true, delete: false } },
+    { id: 'creator', username: 'creator', passwordHash, name: 'Creator', role: 'Пользователь', projectIds: ['project-one'], permissions: { create: true, read: true, update: false, delete: false } },
+    { id: 'create-only', username: 'create-only', passwordHash, name: 'Create Only', role: 'Пользователь', projectIds: ['project-one'], permissions: { create: true, read: false, update: false, delete: false } },
     { id: 'reader', username: 'reader', passwordHash, name: 'Reader', role: 'Пользователь', projectIds: ['project-one'], permissions: { create: false, read: true, update: false, delete: false } },
     { id: 'updater', username: 'updater', passwordHash, name: 'Updater', role: 'Пользователь', projectIds: ['project-one'], permissions: { create: false, read: false, update: true, delete: false } }
   );
@@ -73,7 +76,7 @@ async function createTestServer(t) {
     return { status: response.status, payload };
   }
 
-  return { store, request, login };
+  return { store, dataFile, request, login };
 }
 
 test('creates, displays, and deletes requirement links with project access checks', async (t) => {
@@ -131,6 +134,130 @@ test('creates, displays, and deletes requirement links with project access check
   assert.equal((await server.request(reader, `/api/requirement-links/${linkId}`, { method: 'DELETE' })).status, 403);
   assert.equal((await server.request(editor, `/api/requirement-links/${linkId}`, { method: 'DELETE' })).status, 200);
   assert.deepEqual((await server.request(reader, '/api/requirements/requirement-a/links')).payload.links, []);
+});
+
+test('creates a requirement and its selected links atomically with create and read permissions', async (t) => {
+  const server = await createTestServer(t);
+  const creator = await server.login('creator');
+  const createOnly = await server.login('create-only');
+
+  const options = await server.request(creator, '/api/requirement-link-options?projectId=project-one');
+  assert.equal(options.status, 200);
+  assert.equal(options.payload.types.length, 6);
+  assert.equal((await server.request(createOnly, '/api/requirement-link-options?projectId=project-one')).status, 403);
+
+  const search = await server.request(creator, '/api/requirements/search?projectId=project-one&search=second');
+  assert.deepEqual(search.payload.requirements.map((item) => item.id), ['requirement-b']);
+  assert.equal((await server.request(createOnly, '/api/requirements/search?projectId=project-one&search=second')).status, 403);
+
+  const created = await server.request(creator, '/api/requirements', {
+    method: 'POST',
+    body: {
+      projectId: 'project-one',
+      description: 'New requirement',
+      type: 'functional',
+      priority: 'Средняя',
+      status: 'Новая',
+      links: [
+        { requirementId: 'requirement-a', typeId: 'link-based-on' },
+        { requirementId: 'requirement-b', typeId: 'link-clarifies' }
+      ]
+    }
+  });
+  assert.equal(created.status, 201);
+  const newRequirement = created.payload.requirement;
+  assert.equal(created.payload.links.length, 2);
+  assert.deepEqual(created.payload.links.map((link) => [link.requirementAId, link.requirementBId, link.typeId]), [
+    [newRequirement.id, 'requirement-a', 'link-based-on'],
+    [newRequirement.id, 'requirement-b', 'link-clarifies']
+  ]);
+  const savedLink = server.store.data.requirementLinks[server.store.data.requirementLinks.length - 1];
+  assert.equal(savedLink.requirementAId, newRequirement.id);
+  assert.equal(savedLink.requirementBId, 'requirement-b');
+
+  const deniedLink = await server.request(createOnly, '/api/requirements', {
+    method: 'POST',
+    body: {
+      projectId: 'project-one',
+      description: 'Must not be created',
+      type: 'functional',
+      priority: 'Средняя',
+      status: 'Новая',
+      links: [{ requirementId: 'requirement-b', typeId: 'link-clarifies' }]
+    }
+  });
+  assert.equal(deniedLink.status, 403);
+  assert.equal(server.store.data.requirements.some((item) => item.description === 'Must not be created'), false);
+
+  const createdWithoutLinks = await server.request(createOnly, '/api/requirements', {
+    method: 'POST',
+    body: {
+      projectId: 'project-one',
+      description: 'Creation without read access',
+      type: 'functional',
+      priority: 'Средняя',
+      status: 'Новая'
+    }
+  });
+  assert.equal(createdWithoutLinks.status, 201);
+  assert.equal(createdWithoutLinks.payload.links.length, 0);
+
+  const requirementCount = server.store.data.requirements.length;
+  const linkCount = server.store.data.requirementLinks.length;
+  const invalidLink = await server.request(creator, '/api/requirements', {
+    method: 'POST',
+    body: {
+      projectId: 'project-one',
+      description: 'Must not be partially created',
+      type: 'functional',
+      priority: 'Средняя',
+      status: 'Новая',
+      links: [{ requirementId: 'requirement-c', typeId: 'link-clarifies' }]
+    }
+  });
+  assert.equal(invalidLink.status, 400);
+  assert.equal(server.store.data.requirements.length, requirementCount);
+  assert.equal(server.store.data.requirementLinks.length, linkCount);
+
+  const duplicateLink = await server.request(creator, '/api/requirements', {
+    method: 'POST',
+    body: {
+      projectId: 'project-one',
+      description: 'Duplicate links must be rejected',
+      type: 'functional',
+      priority: 'Средняя',
+      status: 'Новая',
+      links: [
+        { requirementId: 'requirement-b', typeId: 'link-clarifies' },
+        { requirementId: 'requirement-b', typeId: 'link-based-on' }
+      ]
+    }
+  });
+  assert.equal(duplicateLink.status, 400);
+  assert.equal(server.store.data.requirements.length, requirementCount);
+  assert.equal(server.store.data.requirementLinks.length, linkCount);
+
+  const originalSave = server.store.save;
+  server.store.save = () => { throw new Error('Simulated storage failure'); };
+  const failedSave = await server.request(creator, '/api/requirements', {
+    method: 'POST',
+    body: {
+      projectId: 'project-one',
+      description: 'Must be rolled back',
+      type: 'functional',
+      priority: 'Средняя',
+      status: 'Новая',
+      links: [{ requirementId: 'requirement-b', typeId: 'link-clarifies' }]
+    }
+  });
+  server.store.save = originalSave;
+  assert.equal(failedSave.status, 500);
+  assert.equal(server.store.data.requirements.length, requirementCount);
+  assert.equal(server.store.data.requirementLinks.length, linkCount);
+  const persistedData = JSON.parse(readFileSync(server.dataFile, 'utf8'));
+  assert.equal(persistedData.requirements.some((item) => item.id === newRequirement.id), true);
+  assert.equal(persistedData.requirementLinks.filter((item) => item.requirementAId === newRequirement.id).length, 2);
+  assert.equal(persistedData.requirements.some((item) => item.description === 'Must be rolled back'), false);
 });
 
 test('restricts catalog management to administrators and removes links with their type', async (t) => {

@@ -529,6 +529,94 @@ function requirementLinksMarkup(item, links, linkTypes, manageLinks) {
     : '';
   return `<h3 id="related-requirements-title">Связи</h3>${creationControls}<p class="error related-link-error" id="related-link-error" role="alert"></p><div class="related-requirements-table-wrap"><table class="related-requirements-table"><colgroup><col class="related-number-column"><col><col class="related-type-column"><col class="related-action-column"></colgroup><thead><tr><th>Номер</th><th>Краткое описание</th><th>Тип связи</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="related-requirements-empty">Связанные требования не добавлены</td></tr>'}</tbody></table></div>`;
 }
+function newRequirementLinksMarkup(links, linkTypes, canSelect) {
+  const rows = links.map((link, index) => {
+    const type = linkTypes.find((item) => item.id === link.typeId);
+    const direction = type?.directed
+      ? '<span class="related-link-direction">A (новое требование) → B</span>'
+      : '';
+    return `<tr><td>${esc(link.number)}</td><td>${esc(link.description)}</td><td><span>${esc(type?.name || 'Тип удалён')}</span>${direction}</td><td><button type="button" class="icon-button delete draft-related-link-remove" data-index="${index}" title="Убрать связь" aria-label="Убрать связь">×</button></td></tr>`;
+  }).join('');
+  const creationControls = canSelect
+    ? `<div class="related-link-create"><div class="field"><label for="related-requirement-search">Требование</label><input id="related-requirement-search" autocomplete="off" placeholder="Найти по номеру или описанию"><div id="link-search-results" class="link-search-results" role="listbox"></div></div><div class="field"><label for="related-link-type">Тип связи</label><select id="related-link-type" ${linkTypes.length ? '' : 'disabled'}>${linkTypes.length ? optionList(linkTypes, linkTypes[0].id) : '<option value="">Типы связей не настроены</option>'}</select></div><button type="button" class="primary" id="add-related-link" disabled>Добавить связь</button></div>`
+    : '';
+  return `<h3 id="related-requirements-title">Связанные требования</h3>${creationControls}<p class="error related-link-error" id="related-link-error" role="alert"></p><div class="related-requirements-table-wrap"><table class="related-requirements-table"><colgroup><col class="related-number-column"><col><col class="related-type-column"><col class="related-action-column"></colgroup><thead><tr><th>Номер</th><th>Краткое описание</th><th>Тип связи</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="related-requirements-empty">Связанные требования не добавлены</td></tr>'}</tbody></table></div>`;
+}
+function bindNewRequirementLinks(projectId) {
+  const section = document.querySelector('#related-requirements');
+  const canSelect = can('read');
+  let links = [];
+  let linkTypes = [];
+  let selectedRequirement = null;
+  let searchSequence = 0;
+  let loadError = '';
+  const render = () => {
+    section.innerHTML = newRequirementLinksMarkup(links, linkTypes, canSelect);
+    const error = section.querySelector('#related-link-error');
+    error.textContent = loadError;
+    if (!canSelect || !linkTypes.length) return;
+    const searchInput = section.querySelector('#related-requirement-search');
+    const addButton = section.querySelector('#add-related-link');
+    const typeSelect = section.querySelector('#related-link-type');
+    const searchResults = section.querySelector('#link-search-results');
+    const refreshAddButton = () => { addButton.disabled = !selectedRequirement || !typeSelect.value; };
+    const search = debounce(async () => {
+      const query = searchInput.value.trim();
+      const sequence = ++searchSequence;
+      selectedRequirement = null;
+      refreshAddButton();
+      searchResults.innerHTML = '';
+      if (!query) return;
+      try {
+        const params = new URLSearchParams({ projectId, search: query });
+        const result = await api(`/api/requirements/search?${params}`);
+        if (sequence !== searchSequence || searchInput.value.trim() !== query) return;
+        const selectedIds = new Set(links.map((link) => link.requirementId));
+        const results = result.requirements.filter((requirement) => !selectedIds.has(requirement.id));
+        searchResults.innerHTML = results.length
+          ? results.map((requirement) => `<button type="button" class="link-search-result" role="option" data-id="${esc(requirement.id)}">${esc(requirement.number)} — ${esc(requirement.description)}</button>`).join('')
+          : '<span class="muted">Подходящих требований не найдено</span>';
+        searchResults.querySelectorAll('.link-search-result').forEach((button) => {
+          button.onclick = () => {
+            selectedRequirement = result.requirements.find((requirement) => requirement.id === button.dataset.id);
+            searchInput.value = selectedRequirement ? `${selectedRequirement.number} — ${selectedRequirement.description}` : '';
+            searchResults.innerHTML = '';
+            refreshAddButton();
+          };
+        });
+      } catch (requestError) {
+        if (sequence === searchSequence) error.textContent = requestError.message;
+      }
+    }, 250);
+    searchInput.oninput = () => { error.textContent = ''; search(); };
+    typeSelect.onchange = refreshAddButton;
+    addButton.onclick = () => {
+      if (!selectedRequirement || !typeSelect.value) return;
+      links.push({
+        requirementId: selectedRequirement.id,
+        number: selectedRequirement.number,
+        description: selectedRequirement.description,
+        typeId: typeSelect.value
+      });
+      searchSequence++;
+      selectedRequirement = null;
+      render();
+    };
+    section.querySelectorAll('.draft-related-link-remove').forEach((button) => {
+      button.onclick = () => {
+        links.splice(Number(button.dataset.index), 1);
+        render();
+      };
+    });
+  };
+  render();
+  if (canSelect) {
+    api(`/api/requirement-link-options?projectId=${encodeURIComponent(projectId)}`)
+      .then((result) => { linkTypes = result.types; loadError = ''; render(); })
+      .catch((error) => { loadError = error.message; render(); });
+  }
+  return () => links.map(({ requirementId, typeId }) => ({ requirementId, typeId }));
+}
 async function bindRequirementLinks(item) {
   if (!item) return;
   const section = document.querySelector('#related-requirements');
@@ -631,8 +719,8 @@ function openModal(item = null) {
       <div class="requirement-description-column">
         <div class="field"><label>Детальное описание</label><div class="markdown-editor"><div class="markdown-toolbar"><button type="button" data-mark="bold" title="Жирный">B</button><button type="button" data-mark="italic" title="Курсив"><i>I</i></button><button type="button" data-mark="heading" title="Заголовок">H</button><button type="button" data-mark="bullet" title="Список">•</button><button type="button" data-mark="number" title="Нумерованный список">1.</button><button type="button" data-mark="code" title="Код">&lt;/&gt;</button><button type="button" id="preview-toggle" title="Предпросмотр">Предпросмотр</button></div><textarea id="details-markdown" name="detailsMarkdown" rows="8" placeholder="Опишите требование подробно в Markdown...">${esc(item?.detailsMarkdown || '')}</textarea><div id="markdown-preview" class="markdown-preview"></div></div></div>
         <section id="related-requirements" class="related-requirements" aria-labelledby="related-requirements-title">
-          <h3 id="related-requirements-title">Связи</h3>
-          <p class="muted">Загрузка связей…</p>
+          <h3 id="related-requirements-title">Связанные требования</h3>
+          <div class="related-requirements-table-wrap"><table class="related-requirements-table"><colgroup><col class="related-number-column"><col><col class="related-type-column"><col class="related-action-column"></colgroup><thead><tr><th>Номер</th><th>Краткое описание</th><th>Тип связи</th><th></th></tr></thead><tbody><tr><td colspan="4" class="related-requirements-empty">Связанные требования не добавлены</td></tr></tbody></table></div>
         </section>
       </div>
       <div class="requirement-meta">
@@ -679,7 +767,8 @@ function openModal(item = null) {
       if (!isPreviewVisible) editor.focus();
     };
   });
-  document.querySelector('#requirement-form').onsubmit = async (event) => { event.preventDefault(); const body = Object.fromEntries(new FormData(event.currentTarget)); body.projectId = item?.projectId || state.filters.projectId; try { await api(item ? `/api/requirements/${item.id}` : '/api/requirements', { method: item ? 'PUT' : 'POST', body: JSON.stringify(body) }); close(); await refresh(); } catch (error) { document.querySelector('#form-error').textContent = error.message; } };
+  const getDraftLinks = item ? () => [] : bindNewRequirementLinks(state.filters.projectId);
+  document.querySelector('#requirement-form').onsubmit = async (event) => { event.preventDefault(); const body = Object.fromEntries(new FormData(event.currentTarget)); body.projectId = item?.projectId || state.filters.projectId; if (!item) body.links = getDraftLinks(); try { await api(item ? `/api/requirements/${item.id}` : '/api/requirements', { method: item ? 'PUT' : 'POST', body: JSON.stringify(body) }); close(); await refresh(); } catch (error) { document.querySelector('#form-error').textContent = error.message; } };
   if (item) bindRequirementLinks(item);
 }
 async function deleteRequirement(id) { if (!confirm('Удалить это требование?')) return; await api(`/api/requirements/${id}`, { method: 'DELETE' }); await refresh(); }

@@ -244,6 +244,12 @@ export function createApp({ port, publicDir, store, config, auth }) {
         if (!auth.can(user, 'read', requirement.projectId) || !auth.can(user, 'update', requirement.projectId)) return sendJson(response, 403, { error: 'Для создания связей нужны права чтения и изменения в проекте' });
         return sendJson(response, 200, { types: store.data.requirementLinkTypes });
       }
+      if (path === '/api/requirement-link-options' && request.method === 'GET') {
+        const projectId = url.searchParams.get('projectId');
+        if (!configs.projects.some((project) => project.id === projectId)) return sendJson(response, 400, { error: 'Указан неизвестный проект' });
+        if (!auth.can(user, 'create', projectId) || !auth.can(user, 'read', projectId)) return sendJson(response, 403, { error: 'Для выбора связанных требований нужны права создания и чтения в проекте' });
+        return sendJson(response, 200, { types: store.data.requirementLinkTypes });
+      }
       if (path === '/api/requirement-links' && request.method === 'POST') {
         const input = await readBody(request);
         const requirementA = store.data.requirements.find((item) => item.id === input.requirementAId);
@@ -283,9 +289,14 @@ export function createApp({ port, publicDir, store, config, auth }) {
       if (path === '/api/requirements/search' && request.method === 'GET') {
         const projectId = url.searchParams.get('projectId');
         const sourceId = url.searchParams.get('excludeId');
-        const source = store.data.requirements.find((item) => item.id === sourceId);
-        if (!source || source.projectId !== projectId) return sendJson(response, 400, { error: 'Указано некорректное требование для поиска' });
-        if (!auth.can(user, 'read', projectId) || !auth.can(user, 'update', projectId)) return sendJson(response, 403, { error: 'Для поиска требования для связи нужны права чтения и изменения в проекте' });
+        if (!configs.projects.some((project) => project.id === projectId)) return sendJson(response, 400, { error: 'Указан неизвестный проект' });
+        if (sourceId) {
+          const source = store.data.requirements.find((item) => item.id === sourceId);
+          if (!source || source.projectId !== projectId) return sendJson(response, 400, { error: 'Указано некорректное требование для поиска' });
+          if (!auth.can(user, 'read', projectId) || !auth.can(user, 'update', projectId)) return sendJson(response, 403, { error: 'Для поиска требования для связи нужны права чтения и изменения в проекте' });
+        } else if (!auth.can(user, 'create', projectId) || !auth.can(user, 'read', projectId)) {
+          return sendJson(response, 403, { error: 'Для поиска требований при создании нужны права создания и чтения в проекте' });
+        }
         const search = (url.searchParams.get('search') || '').trim().toLocaleLowerCase('ru');
         if (!search) return sendJson(response, 400, { error: 'Укажите поисковый запрос' });
         const requirements = store.data.requirements
@@ -342,9 +353,43 @@ export function createApp({ port, publicDir, store, config, auth }) {
         if (!auth.can(user, 'create', input.projectId)) return sendJson(response, 403, { error: 'Нет права создавать требования в этом проекте' });
         if (!input.description || !validValue('types', input.type, configs) || !validValue('priorities', input.priority, configs) || !validValue('statuses', input.status, configs)) return sendJson(response, 400, { error: 'Заполните обязательные поля корректными значениями' });
         const project = configs.projects.find((item) => item.id === input.projectId);
+        if (!project) return sendJson(response, 400, { error: 'Указан неизвестный проект' });
         if (input.groupId && !groupForProject(input.groupId, project.id)) return sendJson(response, 400, { error: 'Указана неизвестная группа' });
+        const requestedLinks = input.links === undefined ? [] : input.links;
+        if (!Array.isArray(requestedLinks)) return sendJson(response, 400, { error: 'Ожидается список связанных требований' });
+        if (requestedLinks.length && !auth.can(user, 'read', project.id)) return sendJson(response, 403, { error: 'Для выбора связанных требований требуется право чтения в проекте' });
+        const linkedRequirementIds = new Set();
+        const linksToCreate = [];
+        for (const requestedLink of requestedLinks) {
+          if (!requestedLink || typeof requestedLink.requirementId !== 'string' || typeof requestedLink.typeId !== 'string') return sendJson(response, 400, { error: 'Укажите требование и тип для каждой связи' });
+          if (linkedRequirementIds.has(requestedLink.requirementId)) return sendJson(response, 400, { error: 'Одно требование нельзя указать для связи более одного раза' });
+          linkedRequirementIds.add(requestedLink.requirementId);
+          const linkedRequirement = store.data.requirements.find((item) => item.id === requestedLink.requirementId);
+          if (!linkedRequirement || linkedRequirement.projectId !== project.id) return sendJson(response, 400, { error: 'Связывать можно только существующие требования активного проекта' });
+          const linkType = store.data.requirementLinkTypes.find((item) => item.id === requestedLink.typeId);
+          if (!linkType) return sendJson(response, 400, { error: 'Выберите существующий тип связи' });
+          linksToCreate.push({
+            id: randomUUID(),
+            projectId: project.id,
+            requirementAId: null,
+            requirementBId: linkedRequirement.id,
+            typeId: linkType.id
+          });
+        }
         const requirement = { id: randomUUID(), number: nextRequirementNumber(project.id, input.type, configs), description: input.description, detailsMarkdown: input.detailsMarkdown || '', type: input.type, priority: input.priority, complexity: input.complexity || '', status: input.status, release: input.release || '', projectId: project.id, groupId: input.groupId || null };
-        store.data.requirements.push(requirement); store.save(); return sendJson(response, 201, { requirement });
+        for (const link of linksToCreate) link.requirementAId = requirement.id;
+        const previousRequirements = store.data.requirements;
+        const previousLinks = store.data.requirementLinks;
+        store.data.requirements = [...previousRequirements, requirement];
+        store.data.requirementLinks = [...previousLinks, ...linksToCreate];
+        try {
+          store.save();
+        } catch (error) {
+          store.data.requirements = previousRequirements;
+          store.data.requirementLinks = previousLinks;
+          throw error;
+        }
+        return sendJson(response, 201, { requirement, links: linksToCreate });
       }
       if (requirementMatch && ['PUT', 'DELETE'].includes(request.method)) {
         const index = store.data.requirements.findIndex((item) => item.id === requirementMatch[1]);

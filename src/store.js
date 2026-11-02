@@ -1,5 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { randomUUID } from 'node:crypto';
 
 const defaultPermissions = { create: true, read: true, update: true, delete: true };
 const defaultRequirementLinkTypes = [
@@ -38,7 +39,18 @@ export function createStore(dataFile, initialData) {
   data.requirements = data.requirements.map((requirement) => ({ ...requirement, groupId: requirement.groupId || null }));
 
   function save() {
-    writeFileSync(dataFile, JSON.stringify(data, null, 2));
+    const temporaryFile = `${dataFile}.${randomUUID()}.tmp`;
+    try {
+      writeFileSync(temporaryFile, JSON.stringify(data, null, 2), { flag: 'wx' });
+      renameSync(temporaryFile, dataFile);
+    } catch (error) {
+      try {
+        unlinkSync(temporaryFile);
+      } catch (cleanupError) {
+        if (cleanupError.code !== 'ENOENT') throw new AggregateError([error, cleanupError], 'Не удалось сохранить данные и удалить временный файл');
+      }
+      throw error;
+    }
   }
   if (migrated) save();
 
