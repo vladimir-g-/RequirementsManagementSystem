@@ -162,6 +162,32 @@
       "release": "",
       "projectId": "project-alpha",
       "groupId": "021e5d0c-7bd4-477b-9aae-44c64a70296d"
+    },
+    {
+      "id": "c21817b5-ee89-4c98-a16c-783ff8fcd8b2",
+      "number": "NFR-002",
+      "description": "Требование к аутентификации пользователей",
+      "detailsMarkdown": "Система должна предоставлять доступ к функционалу только успешно аутентифицированным пользователям",
+      "type": "non-functional",
+      "priority": "Критическая",
+      "complexity": "Средняя",
+      "status": "Черновик",
+      "release": "",
+      "projectId": "project-alpha",
+      "groupId": "9a18489d-dd74-4426-9b98-e631db96df9c"
+    },
+    {
+      "id": "affd48e3-ccd6-4b01-a208-99c79f97fc46",
+      "number": "NFR-003",
+      "description": "Ограничение доступа к функционалу на основе прав пользователя",
+      "detailsMarkdown": "Доступ к функционалу системы определяется правами пользователя.",
+      "type": "non-functional",
+      "priority": "Критическая",
+      "complexity": "Средняя",
+      "status": "Черновик",
+      "release": "",
+      "projectId": "project-alpha",
+      "groupId": "9a18489d-dd74-4426-9b98-e631db96df9c"
     }
   ],
   "requirementPrefixes": [
@@ -270,6 +296,12 @@
     {
       "id": "9401c4b0-aa95-4d6f-adb9-45deae538188",
       "name": "Требования к производительности",
+      "projectId": "project-alpha",
+      "parentId": "ad63a7d8-a001-4ab5-97ef-fedca404ae19"
+    },
+    {
+      "id": "9a18489d-dd74-4426-9b98-e631db96df9c",
+      "name": "Требования к безопасности",
       "projectId": "project-alpha",
       "parentId": "ad63a7d8-a001-4ab5-97ef-fedca404ae19"
     }
