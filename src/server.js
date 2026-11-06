@@ -343,7 +343,8 @@ export function createApp({ port, publicDir, store, config, auth }) {
         const search = (url.searchParams.get('search') || '').toLowerCase();
         const filters = ['type', 'priority', 'status', 'complexity', 'release'].reduce((result, key) => { result[key] = url.searchParams.getAll(key); return result; }, {});
         const projectRequirements = visibleRequirements(user, store.data.requirements).filter((item) => !projectId || item.projectId === projectId);
-        const requirements = projectRequirements.filter((item) => Object.entries(filters).every(([key, values]) => !values.length || values.includes(item[key])) && (!search || `${item.number} ${item.description} ${configs.types.find((type) => type.id === item.type)?.name || item.type} ${item.type}`.toLowerCase().includes(search)));
+        const requirements = projectRequirements.filter((item) => Object.entries(filters).every(([key, values]) => !values.length || values.includes(item[key])) && (!search || `${item.number} ${item.description} ${configs.types.find((type) => type.id === item.type)?.name || item.type} ${item.type}`.toLowerCase().includes(search)))
+          .map((item) => ({ ...item, version: item.version ?? 1 }));
         const releases = [...new Set(projectRequirements.map((item) => item.release).filter(Boolean))].sort((first, second) => first.localeCompare(second, 'ru', { numeric: true }));
         return sendJson(response, 200, { requirements, releases });
       }
@@ -376,7 +377,7 @@ export function createApp({ port, publicDir, store, config, auth }) {
             typeId: linkType.id
           });
         }
-        const requirement = { id: randomUUID(), number: nextRequirementNumber(project.id, input.type, configs), description: input.description, detailsMarkdown: input.detailsMarkdown || '', type: input.type, priority: input.priority, complexity: input.complexity || '', status: input.status, release: input.release || '', projectId: project.id, groupId: input.groupId || null };
+        const requirement = { id: randomUUID(), number: nextRequirementNumber(project.id, input.type, configs), description: input.description, detailsMarkdown: input.detailsMarkdown || '', type: input.type, priority: input.priority, complexity: input.complexity || '', status: input.status, release: input.release || '', projectId: project.id, groupId: input.groupId || null, version: 1 };
         for (const link of linksToCreate) link.requirementAId = requirement.id;
         const previousRequirements = store.data.requirements;
         const previousLinks = store.data.requirementLinks;
@@ -395,19 +396,40 @@ export function createApp({ port, publicDir, store, config, auth }) {
         const index = store.data.requirements.findIndex((item) => item.id === requirementMatch[1]);
         if (index < 0) return sendJson(response, 404, { error: 'Требование не найдено' });
         const requirement = store.data.requirements[index];
-        if (!auth.can(user, request.method === 'DELETE' ? 'delete' : 'update', requirement.projectId)) return sendJson(response, 403, { error: 'Недостаточно прав для этой операции' });
+        const requiredPermission = request.method === 'DELETE' ? 'delete' : 'update';
+        if (!auth.can(user, 'read', requirement.projectId) || !auth.can(user, requiredPermission, requirement.projectId)) {
+          return sendJson(response, 403, { error: `Для этой операции нужны права read и ${requiredPermission} в проекте` });
+        }
         if (request.method === 'DELETE') {
-          store.data.requirementLinks = store.data.requirementLinks.filter((item) => item.requirementAId !== requirement.id && item.requirementBId !== requirement.id);
-          store.data.requirements.splice(index, 1);
-          store.save();
+          const previousRequirements = store.data.requirements;
+          const previousLinks = store.data.requirementLinks;
+          store.data.requirements = previousRequirements.filter((item) => item.id !== requirement.id);
+          store.data.requirementLinks = previousLinks.filter((item) => item.requirementAId !== requirement.id && item.requirementBId !== requirement.id);
+          try {
+            store.save();
+          } catch (error) {
+            store.data.requirements = previousRequirements;
+            store.data.requirementLinks = previousLinks;
+            throw error;
+          }
           return sendJson(response, 200, { ok: true });
         }
         const input = await readBody(request);
-        const updated = { ...requirement, ...input, id: requirement.id, number: requirement.number, projectId: requirement.projectId };
+        if (!Number.isSafeInteger(input.version) || input.version < 1) return sendJson(response, 400, { error: 'Укажите актуальную версию требования' });
+        const currentVersion = requirement.version ?? 1;
+        if (input.version !== currentVersion) return sendJson(response, 409, { error: 'Требование изменено другим пользователем. Обновите данные и повторите изменение' });
+        const updated = { ...requirement, ...input, id: requirement.id, number: requirement.number, projectId: requirement.projectId, version: currentVersion + 1 };
         if (!input.description || !validValue('types', input.type, configs) || !validValue('priorities', input.priority, configs) || !validValue('statuses', input.status, configs)) return sendJson(response, 400, { error: 'Заполните обязательные поля корректными значениями' });
         if (input.groupId && !groupForProject(input.groupId, requirement.projectId)) return sendJson(response, 400, { error: 'Указана неизвестная группа' });
         updated.groupId = input.groupId || null;
-        store.data.requirements[index] = updated; store.save(); return sendJson(response, 200, { requirement: updated });
+        store.data.requirements[index] = updated;
+        try {
+          store.save();
+        } catch (error) {
+          store.data.requirements[index] = requirement;
+          throw error;
+        }
+        return sendJson(response, 200, { requirement: updated });
       }
       return sendJson(response, 404, { error: 'Маршрут не найден' });
     } catch (error) {

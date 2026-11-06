@@ -47,7 +47,9 @@ async function createTestServer(t) {
     { id: 'creator', username: 'creator', passwordHash, name: 'Creator', role: 'Пользователь', projectIds: ['project-one'], permissions: { create: true, read: true, update: false, delete: false } },
     { id: 'create-only', username: 'create-only', passwordHash, name: 'Create Only', role: 'Пользователь', projectIds: ['project-one'], permissions: { create: true, read: false, update: false, delete: false } },
     { id: 'reader', username: 'reader', passwordHash, name: 'Reader', role: 'Пользователь', projectIds: ['project-one'], permissions: { create: false, read: true, update: false, delete: false } },
-    { id: 'updater', username: 'updater', passwordHash, name: 'Updater', role: 'Пользователь', projectIds: ['project-one'], permissions: { create: false, read: false, update: true, delete: false } }
+    { id: 'updater', username: 'updater', passwordHash, name: 'Updater', role: 'Пользователь', projectIds: ['project-one'], permissions: { create: false, read: false, update: true, delete: false } },
+    { id: 'deleter', username: 'deleter', passwordHash, name: 'Deleter', role: 'Пользователь', projectIds: ['project-one'], permissions: { create: false, read: false, update: false, delete: true } },
+    { id: 'remover', username: 'remover', passwordHash, name: 'Remover', role: 'Пользователь', projectIds: ['project-one'], permissions: { create: false, read: true, update: false, delete: true } }
   );
   store.save();
   const app = createApp({ port: 0, publicDir, store, config, auth });
@@ -309,8 +311,93 @@ test('removes links when a requirement is deleted and preserves the related requ
   const deleted = await server.request(editor, '/api/requirements/requirement-a', { method: 'DELETE' });
   assert.equal(deleted.status, 403);
 
+  const deleter = await server.login('deleter');
+  assert.equal((await server.request(deleter, '/api/requirements/requirement-a', { method: 'DELETE' })).status, 403);
+
   const admin = await server.login('admin');
   assert.equal((await server.request(admin, '/api/requirements/requirement-a', { method: 'DELETE' })).status, 200);
   assert.equal(server.store.data.requirements.some((item) => item.id === 'requirement-b'), true);
   assert.deepEqual(server.store.data.requirementLinks, []);
+});
+
+test('requires read together with update and rejects stale requirement updates', async (t) => {
+  const server = await createTestServer(t);
+  const editor = await server.login('editor');
+  const updater = await server.login('updater');
+
+  const forbidden = await server.request(updater, '/api/requirements/requirement-a', {
+    method: 'PUT',
+    body: { version: 1, description: 'Unauthorized update', type: 'functional', priority: 'Средняя', status: 'Новая' }
+  });
+  assert.equal(forbidden.status, 403);
+
+  const listed = await server.request(editor, '/api/requirements?projectId=project-one');
+  assert.equal(listed.status, 200);
+  assert.equal(listed.payload.requirements[0].version, 1);
+
+  const missingVersion = await server.request(editor, '/api/requirements/requirement-a', {
+    method: 'PUT',
+    body: { description: 'Unversioned update', type: 'functional', priority: 'Средняя', status: 'Новая' }
+  });
+  assert.equal(missingVersion.status, 400);
+
+  const firstUpdate = await server.request(editor, '/api/requirements/requirement-a', {
+    method: 'PUT',
+    body: { version: listed.payload.requirements.find((item) => item.id === 'requirement-a').version, description: 'First update', type: 'functional', priority: 'Средняя', status: 'Новая' }
+  });
+  assert.equal(firstUpdate.status, 200);
+  assert.equal(firstUpdate.payload.requirement.version, 2);
+
+  const staleUpdate = await server.request(editor, '/api/requirements/requirement-a', {
+    method: 'PUT',
+    body: { version: listed.payload.requirements.find((item) => item.id === 'requirement-a').version, description: 'Stale update', type: 'functional', priority: 'Средняя', status: 'Новая' }
+  });
+  assert.equal(staleUpdate.status, 409);
+  assert.equal(server.store.data.requirements.find((item) => item.id === 'requirement-a').description, 'First update');
+});
+
+test('allows requirement deletion only with read and delete permissions', async (t) => {
+  const server = await createTestServer(t);
+  const remover = await server.login('remover');
+
+  const deleted = await server.request(remover, '/api/requirements/requirement-a', { method: 'DELETE' });
+  assert.equal(deleted.status, 200);
+  assert.equal(server.store.data.requirements.some((item) => item.id === 'requirement-a'), false);
+});
+
+test('restores a requirement when persistence fails during update or delete', async (t) => {
+  const server = await createTestServer(t);
+  const editor = await server.login('editor');
+  const remover = await server.login('remover');
+  const originalRequirement = server.store.data.requirements.find((item) => item.id === 'requirement-a');
+
+  server.store.data.requirementLinks.push({
+    id: 'link-a-b',
+    projectId: 'project-one',
+    requirementAId: 'requirement-a',
+    requirementBId: 'requirement-b',
+    typeId: 'link-related-to'
+  });
+  const savedLinks = server.store.data.requirementLinks;
+  server.store.save = () => { throw new Error('Simulated storage failure'); };
+
+  const update = await server.request(editor, '/api/requirements/requirement-a', {
+    method: 'PUT',
+    body: { version: 1, description: 'Unsaved update', type: 'functional', priority: 'Средняя', status: 'Новая' }
+  });
+  assert.equal(update.status, 500);
+  assert.equal(server.store.data.requirements.find((item) => item.id === 'requirement-a'), originalRequirement);
+  assert.equal(originalRequirement.description, 'First requirement');
+
+  const deletion = await server.request(remover, '/api/requirements/requirement-a', { method: 'DELETE' });
+  assert.equal(deletion.status, 500);
+  assert.equal(server.store.data.requirements.find((item) => item.id === 'requirement-a'), originalRequirement);
+  assert.equal(server.store.data.requirementLinks, savedLinks);
+  assert.deepEqual(server.store.data.requirementLinks, [{
+    id: 'link-a-b',
+    projectId: 'project-one',
+    requirementAId: 'requirement-a',
+    requirementBId: 'requirement-b',
+    typeId: 'link-related-to'
+  }]);
 });

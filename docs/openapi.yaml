@@ -658,7 +658,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/RequirementResponse'
         '400':
-          description: Не заполнены обязательные поля или переданы значения вне справочников
+          description: Не указана версия требования или не заполнены обязательные поля/переданы значения вне справочников
           content:
             application/json:
               schema:
@@ -875,6 +875,7 @@ paths:
     put:
       tags: [Requirements]
       summary: Обновить требование
+      description: Требуются независимые права read и update в проекте требования. Если сохранение перезапишет параллельно сохранённые данные, сервер отклоняет изменение и сообщает о конфликте.
       operationId: updateRequirement
       security:
         - sessionCookie: []
@@ -886,7 +887,7 @@ paths:
               $ref: '#/components/schemas/RequirementUpdate'
       responses:
         '200':
-          description: Требование обновлено; id, number и projectId сохраняются сервером
+          description: Требование обновлено; id, number и projectId сохраняются сервером, version увеличивается
           content:
             application/json:
               schema:
@@ -900,17 +901,23 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Недостаточно прав для операции
+          description: Для изменения нужны права read и update в проекте
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '404':
           $ref: '#/components/responses/RequirementNotFound'
+        '409':
+          description: Конфликт параллельных изменений; требование не обновлено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
     delete:
       tags: [Requirements]
       summary: Удалить требование
-      description: При удалении требования сервер также удаляет все его связи, не удаляя другие связанные требования.
+      description: Требуются независимые права read и delete в проекте требования. При удалении сервер также удаляет все его связи, не удаляя другие связанные требования.
       operationId: deleteRequirement
       security:
         - sessionCookie: []
@@ -924,7 +931,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Недостаточно прав для удаления
+          description: Для удаления нужны права read и delete в проекте
           content:
             application/json:
               schema:
@@ -1184,7 +1191,7 @@ components:
       additionalProperties: false
     Requirement:
       type: object
-      required: [id, number, description, detailsMarkdown, type, priority, complexity, status, release, projectId]
+      required: [id, number, description, detailsMarkdown, type, priority, complexity, status, release, projectId, version]
       properties:
         id:
           type: string
@@ -1212,6 +1219,10 @@ components:
         projectId:
           type: string
           readOnly: true
+        version:
+          type: integer
+          minimum: 1
+          description: Версия для обнаружения устаревших изменений
       additionalProperties: false
     RequirementWrite:
       type: object
@@ -1240,9 +1251,13 @@ components:
       additionalProperties: false
     RequirementUpdate:
       type: object
-      description: Поля id, number и projectId игнорируются и сохраняются из существующего требования.
-      required: [description, type, priority, status]
+      description: version должна совпадать с текущей версией требования; иначе сервер возвращает 409. version в успешном ответе увеличивается на 1.
+      required: [version, description, type, priority, status]
       properties:
+        version:
+          type: integer
+          minimum: 1
+          description: Версия требования, на основе которой подготовлено изменение
         description:
           type: string
         detailsMarkdown:
