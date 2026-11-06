@@ -10,6 +10,8 @@ let complexities = [];
 let sortOrders = {};
 let filtersDirty = false;
 let groupsPanelWidth = null;
+let sessionMonitor = null;
+let sessionCheckInProgress = false;
 const REQUIREMENT_COLUMNS = [
   { label: 'Номер', minWidth: 80, defaultWidth: 126 },
   { label: 'Краткое описание', minWidth: 180, defaultWidth: 280 },
@@ -75,8 +77,34 @@ function wrapSelection(textarea, before, after = before) {
   const start = textarea.selectionStart; const end = textarea.selectionEnd; const selected = textarea.value.slice(start, end) || 'текст';
   textarea.setRangeText(`${before}${selected}${after}`, start, end, 'select'); textarea.dispatchEvent(new Event('input'));
 }
-function renderLogin(error = '') {
-  app.innerHTML = `<main class="auth-shell"><section class="auth-visual"><div class="brand">RMS<span>.</span></div><div><h1>Требования, которым можно доверять.</h1><p>Единое пространство для команд, решений и прозрачного жизненного цикла продукта.</p></div><div class="auth-footer">Requirements Management System · 2026</div></section><section class="auth-panel"><form class="auth-card" id="login-form"><h2>Добро пожаловать</h2><p class="sub">Войдите, чтобы продолжить работу</p><div class="field"><label for="username">Логин</label><input id="username" name="username" autocomplete="username" required value="admin"></div><div class="field"><label for="password">Пароль</label><input id="password" name="password" type="password" autocomplete="current-password" required placeholder="Введите пароль"></div>${error ? `<p class="error">${esc(error)}</p>` : ''}<button class="primary full">Войти в систему</button></form></section></main>`;
+function stopSessionMonitor() {
+  if (sessionMonitor) clearInterval(sessionMonitor);
+  sessionMonitor = null;
+}
+async function checkCurrentSession() {
+  if (sessionCheckInProgress || !state.user) return;
+  sessionCheckInProgress = true;
+  try {
+    const result = await api('/api/auth/me');
+    if (!result.user) {
+      state.user = null;
+      stopSessionMonitor();
+      renderLogin('Сеанс завершён. Войдите снова.');
+    }
+  } catch (error) {
+    console.error('Не удалось проверить активный сеанс:', error);
+  } finally {
+    sessionCheckInProgress = false;
+  }
+}
+function startSessionMonitor() {
+  stopSessionMonitor();
+  sessionMonitor = setInterval(checkCurrentSession, 15000);
+}
+function renderLogin(error = '', notice = '') {
+  stopSessionMonitor();
+  document.querySelector('#password-modal')?.remove();
+  app.innerHTML = `<main class="auth-shell"><section class="auth-visual"><div class="brand">RMS<span>.</span></div><div><h1>Требования, которым можно доверять.</h1><p>Единое пространство для команд, решений и прозрачного жизненного цикла продукта.</p></div><div class="auth-footer">Requirements Management System · 2026</div></section><section class="auth-panel"><form class="auth-card" id="login-form"><h2>Добро пожаловать</h2><p class="sub">Войдите, чтобы продолжить работу</p><div class="field"><label for="username">Логин</label><input id="username" name="username" autocomplete="username" required value="admin"></div><div class="field"><label for="password">Пароль</label><input id="password" name="password" type="password" autocomplete="current-password" required placeholder="Введите пароль"></div>${notice ? `<p class="success">${esc(notice)}</p>` : ''}${error ? `<p class="error">${esc(error)}</p>` : ''}<button class="primary full">Войти в систему</button></form></section></main>`;
   document.querySelector('#login-form').addEventListener('submit', async (event) => { event.preventDefault(); const form = new FormData(event.currentTarget); try { const result = await api('/api/auth/login', { method: 'POST', body: JSON.stringify(Object.fromEntries(form)) }); state.user = result.user; await loadApp(); } catch (loginError) { renderLogin(loginError.message); } });
 }
 async function loadConfig() {
@@ -92,7 +120,7 @@ async function loadGroups() {
   state.groups = (await api(`/api/groups?projectId=${encodeURIComponent(state.filters.projectId)}`)).groups;
   if (state.selectedGroupId && !state.groups.some((group) => group.id === state.selectedGroupId)) state.selectedGroupId = '';
 }
-async function loadApp() { await loadConfig(); if (!state.projects.some((project) => project.id === state.filters.projectId)) state.filters.projectId = state.projects[0]?.id || ''; await loadGroups(); await loadRequirements(); renderApp(); }
+async function loadApp() { await loadConfig(); if (!state.projects.some((project) => project.id === state.filters.projectId)) state.filters.projectId = state.projects[0]?.id || ''; await loadGroups(); await loadRequirements(); renderApp(); startSessionMonitor(); }
 function groupAndDescendantIds(groupId) {
   const descendants = new Set([groupId]);
   const pending = [groupId];
@@ -174,11 +202,51 @@ function bindProjectPicker() {
 function bindPrefixProjectPicker() {
   document.querySelector('#project').onchange = async (event) => { state.filters.projectId = event.target.value; await renderPrefixSettings(); };
 }
-function renderProfile() {
-  app.innerHTML = `<div class="shell"><header class="topbar"><div class="topbar-start"><div class="brand">RMS<span>.</span></div>${projectPicker()}</div>${userMenu()}</header><main class="content profile-content"><div class="profile-heading"><div><p class="eyebrow">Личная информация</p><h1>Профиль пользователя</h1></div><button class="clear" id="back-to-requirements">К требованиям</button></div><section class="profile-card"><div class="profile-avatar">${esc((state.user.name || 'A')[0])}</div><div class="profile-details"><div><span class="profile-label">Имя</span><strong>${esc(state.user.name)}</strong></div><div><span class="profile-label">Логин</span><strong>${esc(state.user.username)}</strong></div><div><span class="profile-label">Роль</span><strong>${esc(state.user.role)}</strong></div><div><span class="profile-label">Идентификатор</span><strong>${esc(state.user.id)}</strong></div></div></section></main></div>`;
+function renderProfile(message = '') {
+  app.innerHTML = `<div class="shell"><header class="topbar"><div class="topbar-start"><div class="brand">RMS<span>.</span></div>${projectPicker()}</div>${userMenu()}</header><main class="content profile-content"><div class="profile-heading"><div><p class="eyebrow">Личная информация</p><h1>Профиль пользователя</h1></div><button class="clear" id="back-to-requirements">К требованиям</button></div>${message ? `<p class="error profile-message" role="alert">${esc(message)}</p>` : ''}<section class="profile-card"><div class="profile-avatar">${esc((state.user.name || 'A')[0])}</div><div class="profile-details"><div><span class="profile-label">Имя</span><strong>${esc(state.user.name)}</strong></div><div><span class="profile-label">Логин</span><strong>${esc(state.user.username)}</strong></div><div><span class="profile-label">Роль</span><strong>${esc(state.user.role)}</strong></div><div><span class="profile-label">Идентификатор</span><strong>${esc(state.user.id)}</strong></div><div class="profile-actions"><button class="clear" id="change-password">Изменить пароль</button></div></div></section></main></div>`;
   bindUserMenu();
   bindProjectPicker();
   document.querySelector('#back-to-requirements').onclick = () => renderApp();
+  document.querySelector('#change-password').onclick = () => openPasswordModal();
+}
+function openPasswordModal() {
+  const modal = document.createElement('div');
+  const trigger = document.querySelector('#change-password');
+  modal.className = 'modal-backdrop';
+  modal.id = 'password-modal';
+  modal.innerHTML = `<section class="modal password-modal" role="dialog" aria-modal="true" aria-labelledby="password-modal-title"><div class="modal-header"><div><p class="eyebrow">Безопасность</p><h2 id="password-modal-title">Изменить пароль</h2></div><button type="button" class="close" id="password-close" aria-label="Закрыть">×</button></div><form id="password-form"><div class="field"><label for="new-password">Новый пароль</label><input id="new-password" name="newPassword" type="password" autocomplete="new-password" required></div><div class="field"><label for="confirm-password">Повторите новый пароль</label><input id="confirm-password" name="confirmPassword" type="password" autocomplete="new-password" required></div><p class="error" id="password-error" role="alert"></p><div class="modal-actions"><button type="button" class="cancel" id="password-cancel">Отмена</button><button class="primary" id="password-submit">Сохранить</button></div></form></section>`;
+  document.body.append(modal);
+  const form = modal.querySelector('#password-form');
+  const close = () => { modal.remove(); trigger?.focus(); };
+  modal.querySelector('#password-close').onclick = close;
+  modal.querySelector('#password-cancel').onclick = close;
+  modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
+  modal.addEventListener('keydown', (event) => { if (event.key === 'Escape') close(); });
+  modal.querySelector('#new-password').focus();
+  form.onsubmit = async (event) => {
+    event.preventDefault();
+    const submit = modal.querySelector('#password-submit');
+    const errorElement = modal.querySelector('#password-error');
+    submit.disabled = true;
+    errorElement.textContent = '';
+    try {
+      const body = Object.fromEntries(new FormData(form));
+      const result = await api('/api/auth/password', { method: 'POST', body: JSON.stringify(body) });
+      const notice = result.failedSessionCount
+        ? `Пароль изменён. Не удалось завершить активные сеансы (${result.failedSessionCount}); доступ в них остаётся активным.`
+        : 'Пароль изменён. Войдите снова с новым паролем.';
+      modal.remove();
+      if (result.currentSessionTerminated) {
+        state.user = null;
+        renderLogin('', notice);
+      } else {
+        renderProfile(notice);
+      }
+    } catch (error) {
+      errorElement.textContent = error.message;
+      submit.disabled = false;
+    }
+  };
 }
 function renderAccessDenied(message = 'У вашей учетной записи нет права просматривать требования.') {
   app.innerHTML = `<div class="shell"><header class="topbar"><div class="topbar-start"><div class="brand">RMS<span>.</span></div>${projectPicker()}</div>${userMenu()}</header><main class="content"><section class="access-denied"><p class="eyebrow">Доступ ограничен</p><h1>Недостаточно прав</h1><p>${esc(message)}</p></section></main></div>`;
