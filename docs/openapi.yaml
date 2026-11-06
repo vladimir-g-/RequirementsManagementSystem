@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
   title: Requirements Management System API
-  description: API серверной части системы управления требованиями, включая каталог типов связей и связи требований.
-  version: 1.1.0
+  description: API серверной части системы управления требованиями, включая самостоятельную смену пароля, каталог типов связей и связи требований.
+  version: 1.2.0
   license:
     name: Proprietary
 servers:
@@ -69,6 +69,45 @@ paths:
           headers:
             Set-Cookie:
               $ref: '#/components/headers/ClearedSessionCookie'
+
+  /api/auth/password:
+    post:
+      tags: [Auth]
+      summary: Изменить собственный пароль
+      description: Новый пароль и его подтверждение должны быть непустыми и совпадать. После сохранения система отзывает активные сеансы пользователя; в ответе очищается cookie текущего сеанса, если он завершён.
+      operationId: changeOwnPassword
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordChangeRequest'
+      responses:
+        '200':
+          description: Пароль сохранён; результат отзыва сеансов указан в ответе
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/ClearedSessionCookie'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordChangeResponse'
+        '400':
+          description: Поля пароля не заполнены или значения не совпадают
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: Не удалось сохранить новый пароль
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /api/auth/me:
     get:
@@ -1089,6 +1128,31 @@ components:
         password:
           type: string
           format: password
+      additionalProperties: false
+    PasswordChangeRequest:
+      type: object
+      required: [newPassword, confirmPassword]
+      properties:
+        newPassword:
+          type: string
+          format: password
+          minLength: 1
+        confirmPassword:
+          type: string
+          format: password
+          minLength: 1
+      additionalProperties: false
+    PasswordChangeResponse:
+      type: object
+      required: [currentSessionTerminated, failedSessionCount]
+      properties:
+        currentSessionTerminated:
+          type: boolean
+          description: Завершён ли сеанс, использованный для запроса
+        failedSessionCount:
+          type: integer
+          minimum: 0
+          description: Число сеансов, завершить которые не удалось
       additionalProperties: false
     PermissionSet:
       type: object
