@@ -33,6 +33,7 @@ button { cursor: pointer; }
 .field input:focus, .field select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(8,127,115,.12); }
 .primary { border: 0; border-radius: 7px; padding: 13px 18px; background: var(--teal); color: white; font-weight: 700; transition: background .2s, transform .2s; }
 .primary:hover { background: var(--teal-dark); transform: translateY(-1px); }
+.primary:disabled { opacity: .65; cursor: wait; transform: none; }
 .full { width: 100%; }
 .error { margin: 12px 0; color: var(--red); font-size: 13px; }
 .shell { min-height: 100vh; }
@@ -83,6 +84,10 @@ button { cursor: pointer; }
 .profile-avatar { display: grid; place-items: center; flex: 0 0 auto; width: 88px; height: 88px; border-radius: 50%; background: #dcefeb; color: var(--teal); font: 700 34px 'Space Grotesk', sans-serif; }
 .profile-details { display: grid; grid-template-columns: repeat(3, minmax(130px, 1fr)); gap: 28px; width: 100%; }
 .profile-details div { display: grid; gap: 7px; }
+.profile-actions { grid-column: 1 / -1; padding-top: 6px; border-top: 1px solid var(--line); }
+.profile-message { margin: 0 0 14px; }
+.password-modal { width: min(460px, 100%); }
+.success { color: #18735e; line-height: 1.5; }
 .profile-label { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .heading { display: flex; align-items: end; justify-content: space-between; gap: 20px; margin-bottom: 30px; }
 .content > .heading { display: none !important; }

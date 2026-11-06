@@ -125,8 +125,29 @@ export function createApp({ port, publicDir, store, config, auth }) {
       if (!path.startsWith('/api/')) return serveStatic(request, response);
       const user = requireUser(request, response);
       if (!user) return;
-      const configs = config.load();
 
+      if (path === '/api/auth/password' && request.method === 'POST') {
+        const input = await readBody(request);
+        if (!input || typeof input !== 'object' || typeof input.newPassword !== 'string' || typeof input.confirmPassword !== 'string' || !input.newPassword || !input.confirmPassword) {
+          return sendJson(response, 400, { error: 'Заполните оба поля нового пароля' });
+        }
+        if (input.newPassword !== input.confirmPassword) return sendJson(response, 400, { error: 'Новые пароли не совпадают' });
+
+        let result;
+        try {
+          result = auth.changePassword(request, user.id, input.newPassword);
+        } catch (error) {
+          console.error('Не удалось сохранить новый пароль пользователя:', error);
+          return sendJson(response, 500, { error: 'Не удалось сохранить новый пароль' });
+        }
+        if (result.currentSessionTerminated) {
+          response.writeHead(200, { 'Set-Cookie': 'session=; HttpOnly; Path=/; Max-Age=0', 'Content-Type': 'application/json; charset=utf-8' });
+          return response.end(JSON.stringify(result));
+        }
+        return sendJson(response, 200, result);
+      }
+
+      const configs = config.load();
       if (path === '/api/config' && request.method === 'GET') return sendJson(response, 200, configs);
       if (path === '/api/projects' && request.method === 'GET') return sendJson(response, 200, { projects: visibleProjects(user, configs.projects) });
       if (path === '/api/groups' && request.method === 'GET') {
