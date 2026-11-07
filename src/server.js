@@ -63,11 +63,15 @@ export function createApp({ port, publicDir, store, config, auth }) {
   }
 
   function visibleRequirements(user, requirements) {
-    return user.role === 'Администратор' ? requirements : user.permissions.read ? requirements.filter((item) => user.projectIds.includes(item.projectId)) : [];
+    return requirements.filter((item) => auth.can(user, 'read', item.projectId));
   }
 
   function visibleGroups(user, groups) {
-    return user.role === 'Администратор' ? groups : user.permissions.read ? groups.filter((item) => user.projectIds.includes(item.projectId)) : [];
+    return groups.filter((item) => auth.can(user, 'read', item.projectId));
+  }
+
+  function hasAnyProjectPermission(user, action) {
+    return user.projectIds?.some((projectId) => auth.can(user, action, projectId)) || false;
   }
 
   function groupForProject(groupId, projectId) {
@@ -85,8 +89,24 @@ export function createApp({ port, publicDir, store, config, auth }) {
   }
 
   function normalizeUser(input, existing = {}) {
-    const permissions = Object.fromEntries(permissionNames.map((name) => [name, Boolean(input.permissions?.[name])]));
-    return { ...existing, username: String(input.username || existing.username || '').trim(), name: String(input.name || existing.name || '').trim(), role: roles.includes(input.role) ? input.role : existing.role || 'Пользователь', projectIds: Array.isArray(input.projectIds) ? input.projectIds : existing.projectIds || [], permissions };
+    const requestedProjectIds = Array.isArray(input.projectIds) ? input.projectIds : existing.projectIds || [];
+    const projectIds = [...new Set(requestedProjectIds.map((projectId) => String(projectId)))];
+    const sourcePermissions = input.projectPermissions && typeof input.projectPermissions === 'object'
+      ? input.projectPermissions
+      : existing.projectPermissions || {};
+    const projectPermissions = Object.fromEntries(projectIds.map((projectId) => [
+      projectId,
+      Object.fromEntries(permissionNames.map((name) => [name, Boolean(sourcePermissions[projectId]?.[name])]))
+    ]));
+    return {
+      ...existing,
+      username: String(input.username || existing.username || '').trim(),
+      name: String(input.name || existing.name || '').trim(),
+      role: roles.includes(input.role) ? input.role : existing.role || 'Пользователь',
+      projectIds,
+      projectPermissions,
+      permissions: undefined
+    };
   }
 
   function prefixFor(projectId, type, configs) {
@@ -151,8 +171,9 @@ export function createApp({ port, publicDir, store, config, auth }) {
       if (path === '/api/config' && request.method === 'GET') return sendJson(response, 200, configs);
       if (path === '/api/projects' && request.method === 'GET') return sendJson(response, 200, { projects: visibleProjects(user, configs.projects) });
       if (path === '/api/groups' && request.method === 'GET') {
-        if (!user.permissions.read) return sendJson(response, 403, { error: 'Нет права просматривать группы' });
         const projectId = url.searchParams.get('projectId');
+        if (projectId && !auth.can(user, 'read', projectId)) return sendJson(response, 200, { groups: [] });
+        if (!projectId && user.role !== 'Администратор' && !hasAnyProjectPermission(user, 'read')) return sendJson(response, 403, { error: 'Нет права просматривать группы' });
         const groups = visibleGroups(user, store.data.groups).filter((group) => !projectId || group.projectId === projectId);
         return sendJson(response, 200, { groups });
       }
@@ -359,8 +380,9 @@ export function createApp({ port, publicDir, store, config, auth }) {
       }
 
       if (path === '/api/requirements' && request.method === 'GET') {
-        if (!user.permissions.read) return sendJson(response, 403, { error: 'Нет права просматривать требования' });
         const projectId = url.searchParams.get('projectId');
+        if (projectId && !auth.can(user, 'read', projectId)) return sendJson(response, 200, { requirements: [], releases: [] });
+        if (!projectId && user.role !== 'Администратор' && !hasAnyProjectPermission(user, 'read')) return sendJson(response, 403, { error: 'Нет права просматривать требования' });
         const search = (url.searchParams.get('search') || '').toLowerCase();
         const filters = ['type', 'priority', 'status', 'complexity', 'release'].reduce((result, key) => { result[key] = url.searchParams.getAll(key); return result; }, {});
         const projectRequirements = visibleRequirements(user, store.data.requirements).filter((item) => !projectId || item.projectId === projectId);

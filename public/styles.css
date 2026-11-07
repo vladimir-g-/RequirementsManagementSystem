@@ -249,6 +249,30 @@ td:first-child { color: var(--teal); }
 .permission-option { display: flex; align-items: center; gap: 9px; padding: 8px; border-radius: 5px; cursor: pointer; }
 .permission-option:hover { background: #eef6f4; }
 .permission-option input { width: 16px; height: 16px; accent-color: var(--teal); }
+.field-hint { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.user-access-section[hidden], .check-grid[hidden] { display: none; }
+.access-matrix-wrap { max-height: 320px; overflow: auto; scrollbar-gutter: stable; border: 1px solid var(--line); border-radius: 7px; background: white; }
+.access-matrix { width: 100%; min-width: 640px; border-collapse: separate; border-spacing: 0; }
+.access-matrix th, .access-matrix td { padding: 9px 10px; text-align: center; }
+.access-matrix thead { position: sticky; top: 0; z-index: 3; background: #fbfcfc; }
+.access-matrix thead th { padding: 8px 10px; background: #fbfcfc; }
+.access-matrix thead tr:first-child th { border-bottom: 1px solid var(--line); }
+.access-matrix th:first-child, .access-matrix td:first-child { width: 40%; text-align: left; }
+.access-matrix .access-toggle-head, .access-matrix .access-toggle-cell { width: 64px; background: #f4f8f6; }
+.access-matrix .access-rights-head { color: var(--teal-dark); }
+.access-matrix tbody td { border-top: 1px solid var(--line); }
+.access-matrix tbody tr:first-child td { border-top: 0; }
+.access-matrix tbody tr:hover { background: #f8fbfa; }
+.access-project strong { display: block; color: var(--teal); font-size: 12px; letter-spacing: .03em; }
+.access-project span { color: var(--muted); font-size: 12px; }
+.access-matrix input[type="checkbox"] { width: 17px; height: 17px; margin: 0; accent-color: var(--teal); cursor: pointer; vertical-align: middle; }
+.access-matrix .access-toggle-cell input[type="checkbox"] { width: 19px; height: 19px; }
+.access-matrix input[type="checkbox"]:disabled { cursor: not-allowed; opacity: .35; }
+.access-row-off { background: #fafcfb; }
+.access-row-off .access-project { opacity: .55; }
+.access-row-off .access-toggle-cell { background: #fbfcfc; }
+.user-rights-list { display: grid; gap: 3px; font-size: 12px; }
+.user-rights-project { display: inline-block; min-width: 44px; margin-right: 6px; color: var(--teal); font-weight: 700; }
 .markdown-editor { border: 1px solid #dce4e5; border-radius: 7px; background: white; }
 .markdown-toolbar { display: flex; flex-wrap: wrap; gap: 3px; padding: 7px; border-bottom: 1px solid var(--line); background: #fbfcfc; }
 .mode-switch { display: inline-flex; order: 10; margin-left: auto; padding: 2px; border: 1px solid var(--line); border-radius: 6px; background: #eef3f3; }

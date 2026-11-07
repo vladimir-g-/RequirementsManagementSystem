@@ -43,13 +43,13 @@ async function createTestServer(t) {
   });
   const auth = createAuth(store);
   store.data.users.push(
-    { id: 'editor', username: 'editor', passwordHash, name: 'Editor', role: 'Пользователь', projectIds: ['project-one'], permissions: { create: true, read: true, update: true, delete: false } },
-    { id: 'creator', username: 'creator', passwordHash, name: 'Creator', role: 'Пользователь', projectIds: ['project-one'], permissions: { create: true, read: true, update: false, delete: false } },
-    { id: 'create-only', username: 'create-only', passwordHash, name: 'Create Only', role: 'Пользователь', projectIds: ['project-one'], permissions: { create: true, read: false, update: false, delete: false } },
-    { id: 'reader', username: 'reader', passwordHash, name: 'Reader', role: 'Пользователь', projectIds: ['project-one'], permissions: { create: false, read: true, update: false, delete: false } },
-    { id: 'updater', username: 'updater', passwordHash, name: 'Updater', role: 'Пользователь', projectIds: ['project-one'], permissions: { create: false, read: false, update: true, delete: false } },
-    { id: 'deleter', username: 'deleter', passwordHash, name: 'Deleter', role: 'Пользователь', projectIds: ['project-one'], permissions: { create: false, read: false, update: false, delete: true } },
-    { id: 'remover', username: 'remover', passwordHash, name: 'Remover', role: 'Пользователь', projectIds: ['project-one'], permissions: { create: false, read: true, update: false, delete: true } }
+    { id: 'editor', username: 'editor', passwordHash, name: 'Editor', role: 'Пользователь', projectIds: ['project-one'], projectPermissions: { 'project-one': { create: true, read: true, update: true, delete: false } } },
+    { id: 'creator', username: 'creator', passwordHash, name: 'Creator', role: 'Пользователь', projectIds: ['project-one'], projectPermissions: { 'project-one': { create: true, read: true, update: false, delete: false } } },
+    { id: 'create-only', username: 'create-only', passwordHash, name: 'Create Only', role: 'Пользователь', projectIds: ['project-one'], projectPermissions: { 'project-one': { create: true, read: false, update: false, delete: false } } },
+    { id: 'reader', username: 'reader', passwordHash, name: 'Reader', role: 'Пользователь', projectIds: ['project-one'], projectPermissions: { 'project-one': { create: false, read: true, update: false, delete: false } } },
+    { id: 'updater', username: 'updater', passwordHash, name: 'Updater', role: 'Пользователь', projectIds: ['project-one'], projectPermissions: { 'project-one': { create: false, read: false, update: true, delete: false } } },
+    { id: 'deleter', username: 'deleter', passwordHash, name: 'Deleter', role: 'Пользователь', projectIds: ['project-one'], projectPermissions: { 'project-one': { create: false, read: false, update: false, delete: true } } },
+    { id: 'remover', username: 'remover', passwordHash, name: 'Remover', role: 'Пользователь', projectIds: ['project-one'], projectPermissions: { 'project-one': { create: false, read: true, update: false, delete: true } } }
   );
   store.save();
   const app = createApp({ port: 0, publicDir, store, config, auth });

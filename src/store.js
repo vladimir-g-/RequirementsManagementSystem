@@ -28,12 +28,25 @@ export function createStore(dataFile, initialData) {
     data.requirementLinks = [];
     migrated = true;
   }
-  data.users = data.users.map((user) => ({
-    ...user,
-    role: user.role || 'Администратор',
-    projectIds: user.projectIds || [],
-    permissions: { ...defaultPermissions, ...user.permissions }
-  }));
+  data.users = data.users.map((user) => {
+    const projectIds = Array.isArray(user.projectIds) ? [...new Set(user.projectIds)] : [];
+    const legacyPermissions = user.permissions !== undefined
+      ? { ...defaultPermissions, ...user.permissions }
+      : { create: false, read: false, update: false, delete: false };
+    const storedPermissions = user.projectPermissions && typeof user.projectPermissions === 'object' ? user.projectPermissions : null;
+    const projectPermissions = Object.fromEntries(projectIds.map((projectId) => [
+      projectId,
+      { ...defaultPermissions, ...(storedPermissions?.[projectId] || legacyPermissions) }
+    ]));
+    if (!storedPermissions || user.permissions !== undefined || Object.keys(storedPermissions).length !== projectIds.length || projectIds.some((projectId) => !storedPermissions[projectId])) migrated = true;
+    return {
+      ...user,
+      role: user.role || 'Администратор',
+      projectIds,
+      projectPermissions,
+      permissions: undefined
+    };
+  });
   data.requirementPrefixes = Array.isArray(data.requirementPrefixes) ? data.requirementPrefixes : [];
   data.groups = Array.isArray(data.groups) ? data.groups : [];
   data.requirements = data.requirements.map((requirement) => ({ ...requirement, groupId: requirement.groupId || null }));

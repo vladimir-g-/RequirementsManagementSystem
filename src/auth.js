@@ -36,7 +36,7 @@ export function createAuth(store) {
 
   function publicUser(user) {
     if (!user) return null;
-    return { id: user.id, username: user.username, name: user.name, role: user.role, projectIds: user.projectIds, permissions: user.permissions };
+    return { id: user.id, username: user.username, name: user.name, role: user.role, projectIds: user.projectIds || [], projectPermissions: user.projectPermissions || {} };
   }
 
   function userFromRequest(request) {
@@ -91,8 +91,10 @@ export function createAuth(store) {
   }
 
   function can(user, action, projectId) {
-    if (!user || !user.permissions?.[action]) return false;
-    return user.role === 'Администратор' || user.projectIds.includes(projectId);
+    if (!user) return false;
+    if (user.role === 'Администратор') return true;
+    if (!user.projectIds?.includes(projectId)) return false;
+    return Boolean(user.projectPermissions?.[projectId]?.[action]);
   }
 
   return { hashPassword, publicUser, userFromRequest, login, logout, changePassword, can };

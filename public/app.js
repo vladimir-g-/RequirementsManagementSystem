@@ -50,7 +50,13 @@ document.addEventListener('click', (event) => {
   }
 });
 function badge(value) { const cls = value === 'Готово' ? 'done' : value === 'Критическая' || value === 'Высокая' ? 'high' : ''; return `<span class="badge ${cls}">${esc(value)}</span>`; }
-function can(action) { return state.user?.role === 'Администратор' || Boolean(state.user?.permissions?.[action]); }
+function can(action) {
+  const user = state.user;
+  if (!user) return false;
+  if (user.role === 'Администратор') return true;
+  const projectId = state.filters.projectId;
+  return Boolean(projectId && user.projectPermissions?.[projectId]?.[action]);
+}
 function sortRequirements() {
   if (!state.sort.key || !state.sort.direction) return;
   const key = state.sort.key;
@@ -379,9 +385,22 @@ function initColumnResizers() {
   updateRequirementTableWidth();
   if (widthsAdjusted) saveRequirementColumnWidths();
 }
+const USER_PERMISSION_SHORT = { create: 'Создание', read: 'Просмотр', update: 'Изменение', delete: 'Удаление' };
+function userPermissionSummary(user) {
+  if (user.role === 'Администратор') return 'Полный доступ';
+  if (!user.projectIds?.length) return 'Проекты не назначены';
+  return `<div class="user-rights-list">${user.projectIds.map((projectId) => {
+    const project = state.projects.find((candidate) => candidate.id === projectId);
+    const rights = Object.entries(user.projectPermissions?.[projectId] || {})
+      .filter(([, enabled]) => enabled)
+      .map(([name]) => USER_PERMISSION_SHORT[name])
+      .join(', ');
+    return `<div><span class="user-rights-project">${esc(project?.code || projectId)}</span>${rights ? esc(rights) : '<span class="muted">нет прав</span>'}</div>`;
+  }).join('')}</div>`;
+}
 async function renderUsers() {
   const result = await api('/api/users');
-  app.innerHTML = `<div class="shell"><header class="topbar"><div class="topbar-start"><div class="brand">RMS<span>.</span></div>${projectPicker()}</div>${userMenu()}</header><main class="content"><div class="profile-heading"><div><p class="eyebrow">Администрирование</p><h1>Пользователи и права</h1></div><div class="heading-actions"><button class="clear" id="back-to-requirements">← К требованиям</button><button class="primary" id="add-user">+ Новый пользователь</button></div></div><div class="table-wrap"><table class="users-table"><thead><tr><th>Имя</th><th>Логин</th><th>Роль</th><th>Проекты</th><th>Права</th><th></th></tr></thead><tbody>${result.users.map((item) => `<tr><td class="description">${esc(item.name)}</td><td>${esc(item.username)}</td><td><span class="badge">${esc(item.role)}</span></td><td>${item.role === 'Администратор' ? 'Все проекты' : item.projectIds.map((id) => esc(state.projects.find((project) => project.id === id)?.code || id)).join(', ') || 'Не назначены'}</td><td>${item.role === 'Администратор' ? 'Полный доступ' : Object.entries(item.permissions).filter(([, enabled]) => enabled).map(([name]) => ({ create: 'Создание', read: 'Просмотр', update: 'Изменение', delete: 'Удаление' }[name])).join(', ') || 'Нет прав'}</td><td><div class="actions"><button class="icon-button user-edit" data-id="${item.id}" title="Редактировать">✎</button><button class="icon-button delete user-delete" data-id="${item.id}" title="Удалить">×</button></div></td></tr>`).join('')}</tbody></table></div></main></div>`;
+  app.innerHTML = `<div class="shell"><header class="topbar"><div class="topbar-start"><div class="brand">RMS<span>.</span></div>${projectPicker()}</div>${userMenu()}</header><main class="content"><div class="profile-heading"><div><p class="eyebrow">Администрирование</p><h1>Пользователи и права</h1></div><div class="heading-actions"><button class="clear" id="back-to-requirements">← К требованиям</button><button class="primary" id="add-user">+ Новый пользователь</button></div></div><div class="table-wrap"><table class="users-table"><thead><tr><th>Имя</th><th>Логин</th><th>Роль</th><th>Проекты</th><th>Права</th><th></th></tr></thead><tbody>${result.users.map((item) => `<tr><td class="description">${esc(item.name)}</td><td>${esc(item.username)}</td><td><span class="badge">${esc(item.role)}</span></td><td>${item.role === 'Администратор' ? 'Все проекты' : item.projectIds.map((id) => esc(state.projects.find((project) => project.id === id)?.code || id)).join(', ') || 'Не назначены'}</td><td>${userPermissionSummary(item)}</td><td><div class="actions"><button class="icon-button user-edit" data-id="${item.id}" title="Редактировать">✎</button><button class="icon-button delete user-delete" data-id="${item.id}" title="Удалить">×</button></div></td></tr>`).join('')}</tbody></table></div></main></div>`;
   bindUserMenu(); bindProjectPicker();
   document.querySelector('#back-to-requirements').onclick = () => renderApp();
   document.querySelector('#add-user').onclick = () => openUserModal();
@@ -455,12 +474,69 @@ function legacyOpenUserModal(item = null) {
 }
 function openUserModal(item = null) {
   const permissionLabels = { create: 'Создание требований', read: 'Просмотр требований', update: 'Изменение требований', delete: 'Удаление требований' };
-  const projectOptions = state.projects.map((project) => `<label class="permission-option"><input type="checkbox" name="projectIds" value="${project.id}" ${item?.projectIds.includes(project.id) ? 'checked' : ''}><span>${esc(project.code)} · ${esc(project.name)}</span></label>`).join('');
-  const permissionOptions = Object.entries(permissionLabels).map(([key, label]) => `<label class="permission-option"><input type="checkbox" name="permission-${key}" ${item?.permissions[key] ? 'checked' : ''}><span>${label}</span></label>`).join('');
-  document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop" id="user-modal"><form class="modal user-modal" id="user-form"><div class="modal-header"><div><p class="eyebrow">${item ? 'Редактирование' : 'Новая запись'}</p><h2>${item ? 'Изменить пользователя' : 'Добавить пользователя'}</h2></div><button type="button" class="close" id="user-close">×</button></div><div class="form-grid"><div class="field"><label>Имя *</label><input name="name" required value="${esc(item?.name || '')}"></div><div class="field"><label>Логин *</label><input name="username" required value="${esc(item?.username || '')}"></div><div class="field"><label>Роль *</label><select name="role" id="user-role"><option ${item?.role === 'Администратор' ? 'selected' : ''}>Администратор</option><option ${item?.role !== 'Администратор' ? 'selected' : ''}>Пользователь</option></select></div><div class="field"><label>Пароль ${item ? '' : '*'}</label><input name="password" type="password" ${item ? '' : 'required'}></div><div class="field wide user-access-section"><label>Доступные проекты</label><div class="check-grid">${projectOptions}</div></div><div class="field wide user-access-section"><label>Права на требования</label><div class="check-grid">${permissionOptions}</div></div></div><p class="error" id="user-form-error"></p><div class="modal-actions"><button type="button" class="cancel" id="user-cancel">Отмена</button><button class="primary">${item ? 'Сохранить изменения' : 'Создать пользователя'}</button></div></form></div>`);
-  const modal = document.querySelector('#user-modal'); const close = () => modal.remove(); document.querySelector('#user-close').onclick = close; document.querySelector('#user-cancel').onclick = close;
-  const role = document.querySelector('#user-role'); const sections = document.querySelectorAll('.user-access-section'); const updateVisibility = () => sections.forEach((section) => { section.hidden = role.value === 'Администратор'; }); role.onchange = updateVisibility; updateVisibility();
-  document.querySelector('#user-form').onsubmit = async (event) => { event.preventDefault(); const form = new FormData(event.currentTarget); const body = { name: form.get('name'), username: form.get('username'), role: form.get('role'), password: form.get('password'), projectIds: form.getAll('projectIds'), permissions: Object.fromEntries(Object.keys(permissionLabels).map((key) => [key, form.has(`permission-${key}`)])) }; try { await api(item ? `/api/users/${item.id}` : '/api/users', { method: item ? 'PUT' : 'POST', body: JSON.stringify(body) }); close(); await renderUsers(); } catch (error) { document.querySelector('#user-form-error').textContent = error.message; } };
+  const permissionKeys = Object.keys(permissionLabels);
+  const emptyPermissions = () => Object.fromEntries(permissionKeys.map((key) => [key, false]));
+  const itemProjectIds = item?.projectIds || [];
+  const projectRights = new Map(state.projects.map((project) => {
+    const source = item?.projectPermissions?.[project.id];
+    return [project.id, Object.fromEntries(permissionKeys.map((key) => [key, Boolean(source?.[key])]))];
+  }));
+  const accessRows = state.projects.map((project) => {
+    const hasAccess = itemProjectIds.includes(project.id);
+    const permissions = projectRights.get(project.id) || emptyPermissions();
+    return `<tr class="access-row${hasAccess ? '' : ' access-row-off'}" data-project-id="${esc(project.id)}"><td class="access-project"><strong>${esc(project.code)}</strong><span>${esc(project.name)}</span></td><td class="access-cell access-toggle-cell"><input type="checkbox" name="projectIds" value="${esc(project.id)}" data-access aria-label="Доступ к проекту ${esc(project.name)}" ${hasAccess ? 'checked' : ''}></td>${permissionKeys.map((key) => `<td class="access-cell"><input type="checkbox" data-permission="${key}" aria-label="${permissionLabels[key]} в проекте ${esc(project.name)}" ${permissions[key] ? 'checked' : ''} ${hasAccess ? '' : 'disabled'}></td>`).join('')}</tr>`;
+  }).join('');
+  document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop" id="user-modal"><form class="modal user-modal" id="user-form"><div class="modal-header"><div><p class="eyebrow">${item ? 'Редактирование' : 'Новая запись'}</p><h2>${item ? 'Изменить пользователя' : 'Добавить пользователя'}</h2></div><button type="button" class="close" id="user-close">×</button></div><div class="form-grid"><div class="field"><label>Имя *</label><input name="name" required value="${esc(item?.name || '')}"></div><div class="field"><label>Логин *</label><input name="username" required value="${esc(item?.username || '')}"></div><div class="field"><label>Роль *</label><select name="role" id="user-role"><option ${item?.role === 'Администратор' ? 'selected' : ''}>Администратор</option><option ${item?.role !== 'Администратор' ? 'selected' : ''}>Пользователь</option></select></div><div class="field"><label>Пароль ${item ? '' : '*'}</label><input name="password" type="password" ${item ? '' : 'required'}></div><div class="field wide user-access-section"><label>Доступ к проектам и права</label><p class="field-hint">Отметьте доступ к проекту и разрешения на требования в нём. Без доступа права недоступны для изменения.</p><div class="access-matrix-wrap"><table class="access-matrix" id="user-access-matrix"><thead><tr><th rowspan="2">Проект</th><th rowspan="2" class="access-toggle-head">Доступ</th><th colspan="4" class="access-rights-head">Права на требования</th></tr><tr>${permissionKeys.map((key) => `<th>${USER_PERMISSION_SHORT[key]}</th>`).join('')}</tr></thead><tbody>${accessRows || '<tr><td colspan="6" class="empty">Проекты не настроены</td></tr>'}</tbody></table></div></div></div><p class="error" id="user-form-error"></p><div class="modal-actions"><button type="button" class="cancel" id="user-cancel">Отмена</button><button class="primary">${item ? 'Сохранить изменения' : 'Создать пользователя'}</button></div></form></div>`);
+  const modal = document.querySelector('#user-modal');
+  const close = () => modal.remove();
+  document.querySelector('#user-close').onclick = close;
+  document.querySelector('#user-cancel').onclick = close;
+  const role = document.querySelector('#user-role');
+  const sections = document.querySelectorAll('.user-access-section');
+  const updateVisibility = () => sections.forEach((section) => { section.hidden = role.value === 'Администратор'; });
+  role.onchange = updateVisibility;
+  updateVisibility();
+  const accessMatrix = document.querySelector('#user-access-matrix');
+  const updateRowState = (row) => {
+    const enabled = row.querySelector('input[data-access]').checked;
+    row.classList.toggle('access-row-off', !enabled);
+    row.querySelectorAll('input[data-permission]').forEach((input) => { input.disabled = !enabled; });
+  };
+  accessMatrix.querySelectorAll('tbody tr[data-project-id]').forEach((row) => {
+    const projectId = row.dataset.projectId;
+    const accessInput = row.querySelector('input[data-access]');
+    accessInput.onchange = () => {
+      if (accessInput.checked && !projectRights.has(projectId)) projectRights.set(projectId, emptyPermissions());
+      updateRowState(row);
+    };
+    row.querySelectorAll('input[data-permission]').forEach((input) => {
+      input.onchange = () => {
+        const permissions = projectRights.get(projectId);
+        if (permissions) permissions[input.dataset.permission] = input.checked;
+      };
+    });
+    updateRowState(row);
+  });
+  document.querySelector('#user-form').onsubmit = async (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const projectIds = form.getAll('projectIds');
+    const body = {
+      name: form.get('name'),
+      username: form.get('username'),
+      role: form.get('role'),
+      password: form.get('password'),
+      projectIds,
+      projectPermissions: Object.fromEntries(projectIds.map((projectId) => [projectId, projectRights.get(projectId) || emptyPermissions()]))
+    };
+    try {
+      await api(item ? `/api/users/${item.id}` : '/api/users', { method: item ? 'PUT' : 'POST', body: JSON.stringify(body) });
+      close();
+      await renderUsers();
+    } catch (error) {
+      document.querySelector('#user-form-error').textContent = error.message;
+    }
+  };
 }
 async function deleteUser(id) { if (!confirm('Удалить пользователя?')) return; try { await api(`/api/users/${id}`, { method: 'DELETE' }); await renderUsers(); } catch (error) { alert(error.message); } }
 function groupOptions(selected = '') {

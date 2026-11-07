@@ -10,11 +10,19 @@
         "project-alpha",
         "project-beta"
       ],
-      "permissions": {
-        "create": true,
-        "read": true,
-        "update": true,
-        "delete": true
+      "projectPermissions": {
+        "project-alpha": {
+          "create": true,
+          "read": true,
+          "update": true,
+          "delete": true
+        },
+        "project-beta": {
+          "create": true,
+          "read": true,
+          "update": true,
+          "delete": true
+        }
       }
     },
     {
@@ -25,13 +33,15 @@
       "projectIds": [
         "project-alpha"
       ],
-      "permissions": {
-        "create": true,
-        "read": true,
-        "update": true,
-        "delete": false
-      },
-      "passwordHash": "e606e38b0d8c19b24cf0ee3808183162ea7cd63ff7912dbb22b5e803286b4446"
+      "passwordHash": "e606e38b0d8c19b24cf0ee3808183162ea7cd63ff7912dbb22b5e803286b4446",
+      "projectPermissions": {
+        "project-alpha": {
+          "create": true,
+          "read": true,
+          "update": true,
+          "delete": false
+        }
+      }
     }
   ],
   "projects": [
@@ -270,7 +280,7 @@
     {
       "projectId": "project-beta",
       "type": "business-requirement",
-      "prefix": "MOB"
+      "prefix": "BR"
     }
   ],
   "groups": [
