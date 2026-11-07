@@ -42,6 +42,15 @@
           "delete": false
         }
       }
+    },
+    {
+      "id": "34c65cd5-e328-476a-a439-715b2737d3f1",
+      "username": "test2",
+      "name": "Test2",
+      "role": "Пользователь",
+      "projectIds": [],
+      "projectPermissions": {},
+      "passwordHash": "scrypt$ea3a022bbcf6d4974fe6fbf954074f4e$c4e54362991fabf246c21f295ed47fc9c1713b49fa776843bc4ff6d0dc33cdc61351aa738289ce3cf259ac92d5c7b9cae1219af935cf962d9e578fcb27e3ceb3"
     }
   ],
   "projects": [

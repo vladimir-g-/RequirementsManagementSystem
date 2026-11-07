@@ -126,7 +126,21 @@ async function loadGroups() {
   state.groups = (await api(`/api/groups?projectId=${encodeURIComponent(state.filters.projectId)}`)).groups;
   if (state.selectedGroupId && !state.groups.some((group) => group.id === state.selectedGroupId)) state.selectedGroupId = '';
 }
-async function loadApp() { await loadConfig(); if (!state.projects.some((project) => project.id === state.filters.projectId)) state.filters.projectId = state.projects[0]?.id || ''; await loadGroups(); await loadRequirements(); renderApp(); startSessionMonitor(); }
+async function loadApp() {
+  await loadConfig();
+  if (!state.projects.some((project) => project.id === state.filters.projectId)) state.filters.projectId = state.projects[0]?.id || '';
+  if (state.projects.length) {
+    await loadGroups();
+    await loadRequirements();
+  } else {
+    state.groups = [];
+    state.requirements = [];
+    state.releases = [];
+    state.selectedGroupId = '';
+  }
+  renderApp();
+  startSessionMonitor();
+}
 function groupAndDescendantIds(groupId) {
   const descendants = new Set([groupId]);
   const pending = [groupId];
@@ -155,6 +169,7 @@ function userMenu() {
   return `<details class="user-menu"><summary><span class="avatar">${esc((state.user.name || 'A')[0])}</span><span>${esc(state.user.name)}</span><span class="menu-chevron" aria-hidden="true">⌄</span></summary><div class="user-menu-list"><button type="button" id="profile-link">Профиль</button>${adminMenu}<button type="button" id="logout">Выйти</button></div></details>`;
 }
 function projectPicker() {
+  if (!state.projects.length) return '';
   return `<div class="topbar-project field"><label for="project">Активный проект</label><select id="project">${state.projects.map((item) => `<option value="${item.id}" ${item.id === state.filters.projectId ? 'selected' : ''}>${esc(item.code)} · ${esc(item.name)}</option>`).join('')}</select></div>`;
 }
 function bindUserMenu() {
@@ -203,10 +218,14 @@ function bindUserMenu() {
   document.querySelector('#logout').onclick = async () => { await api('/api/auth/logout', { method: 'POST' }); state.user = null; renderLogin(); };
 }
 function bindProjectPicker() {
-  document.querySelector('#project').onchange = async (event) => { state.filters.projectId = event.target.value; state.selectedGroupId = ''; await loadGroups(); await refresh(); };
+  const picker = document.querySelector('#project');
+  if (!picker) return;
+  picker.onchange = async (event) => { state.filters.projectId = event.target.value; state.selectedGroupId = ''; await loadGroups(); await refresh(); };
 }
 function bindPrefixProjectPicker() {
-  document.querySelector('#project').onchange = async (event) => { state.filters.projectId = event.target.value; await renderPrefixSettings(); };
+  const picker = document.querySelector('#project');
+  if (!picker) return;
+  picker.onchange = async (event) => { state.filters.projectId = event.target.value; await renderPrefixSettings(); };
 }
 function renderProfile(message = '') {
   app.innerHTML = `<div class="shell"><header class="topbar"><div class="topbar-start"><div class="brand">RMS<span>.</span></div>${projectPicker()}</div>${userMenu()}</header><main class="content profile-content"><div class="profile-heading"><div><p class="eyebrow">Личная информация</p><h1>Профиль пользователя</h1></div><button class="clear" id="back-to-requirements">К требованиям</button></div>${message ? `<p class="error profile-message" role="alert">${esc(message)}</p>` : ''}<section class="profile-card"><div class="profile-avatar">${esc((state.user.name || 'A')[0])}</div><div class="profile-details"><div><span class="profile-label">Имя</span><strong>${esc(state.user.name)}</strong></div><div><span class="profile-label">Логин</span><strong>${esc(state.user.username)}</strong></div><div><span class="profile-label">Роль</span><strong>${esc(state.user.role)}</strong></div><div><span class="profile-label">Идентификатор</span><strong>${esc(state.user.id)}</strong></div><div class="profile-actions"><button class="clear" id="change-password">Изменить пароль</button></div></div></section></main></div>`;
@@ -257,6 +276,14 @@ function openPasswordModal() {
 function renderAccessDenied(message = 'У вашей учетной записи нет права просматривать требования.') {
   app.innerHTML = `<div class="shell"><header class="topbar"><div class="topbar-start"><div class="brand">RMS<span>.</span></div>${projectPicker()}</div>${userMenu()}</header><main class="content"><section class="access-denied"><p class="eyebrow">Доступ ограничен</p><h1>Недостаточно прав</h1><p>${esc(message)}</p></section></main></div>`;
   bindUserMenu(); bindProjectPicker();
+}
+function renderNoProjects() {
+  const isAdmin = state.user.role === 'Администратор';
+  const message = isAdmin
+    ? 'В системе пока не настроено ни одного проекта.'
+    : 'У вашей учётной записи нет доступа ни к одному проекту. Обратитесь к администратору, чтобы он назначил проект.';
+  app.innerHTML = `<div class="shell"><header class="topbar"><div class="topbar-start"><div class="brand">RMS<span>.</span></div></div>${userMenu()}</header><main class="content"><section class="access-denied"><p class="eyebrow">Доступ к проектам</p><h1>${isAdmin ? 'Проекты не настроены' : 'Нет доступных проектов'}</h1><p>${esc(message)}</p></section></main></div>`;
+  bindUserMenu();
 }
 function loadRequirementColumnWidths() {
   const userId = state.user?.id || state.user?.username || 'guest';
@@ -623,6 +650,7 @@ function bindGroups() {
   initSplitter();
 }
 function renderApp() {
+  if (!state.projects.length) { renderNoProjects(); return; }
   app.innerHTML = `<div class="shell"><header class="topbar"><div class="topbar-start"><div class="brand">RMS<span>.</span></div>${projectPicker()}</div>${userMenu()}</header><main class="content"><div class="heading"><div><h1>Требования</h1><p class="page-note">Группируйте требования в иерархию без ограничения вложенности.</p></div></div><div class="toolbar"><div class="field project-field"><label for="search">Поиск</label><input id="search" placeholder="Номер, описание или тип" value="${esc(state.filters.search)}"></div>${multiFilter('type', 'Тип', types)}${multiFilter('priority', 'Важность', priorities)}${multiFilter('complexity', 'Сложность', complexities)}${multiFilter('status', 'Статус', statuses)}${multiFilter('release', 'Релиз', state.releases)}<button class="clear" id="clear">Сбросить</button>${can('create') ? '<button class="primary" id="add">+ Новое требование</button>' : ''}</div><div class="requirements-layout"><aside class="groups-panel"><div class="groups-heading"><strong>Группы</strong><div class="groups-heading-actions">${can('create') ? '<button class="link-button" id="add-group">+ Новая группа</button>' : ''}<button class="link-button" id="all-groups">Все</button></div></div><ul class="group-tree">${groupTree()}</ul>${!state.groups.length ? '<p class="muted">Групп пока нет</p>' : ''}</aside><div class="splitter" id="splitter"></div><div class="table-wrap"><table><thead><tr><th>Номер</th><th>Краткое описание</th><th>Группа</th><th>Тип</th><th>Важность</th><th>Сложность</th><th>Статус</th><th>Релиз</th><th></th></tr></thead><tbody>${state.requirements.length ? state.requirements.map((item) => `<tr><td>${can('read') ? `<button class="requirement-number ${can('update') ? 'edit' : 'view'}" data-id="${esc(item.id)}" title="${can('update') ? 'Редактировать требование' : 'Просмотреть требование'}">${esc(item.number)}</button>` : esc(item.number)}</td><td class="description">${esc(item.description)}</td><td>${esc(state.groups.find((group) => group.id === item.groupId)?.name || 'Без группы')}</td><td>${esc(requirementTypeName(item.type))}</td><td>${badge(item.priority)}</td><td>${badge(item.complexity)}</td><td>${badge(item.status)}</td><td>${esc(item.release)}</td><td><div class="actions">${can('update') ? `<button class="icon-button edit" data-id="${esc(item.id)}" title="Редактировать">✎</button>` : ''}${can('delete') ? `<button class="icon-button delete-requirement" data-id="${esc(item.id)}" title="Удалить">×</button>` : ''}</div></td></tr>`).join('') : `<tr><td colspan="9" class="empty">В выбранной области нет требований</td></tr>`}</tbody></table></div></div></main></div>`;
   initRequirementTable();
   bindUserMenu();
