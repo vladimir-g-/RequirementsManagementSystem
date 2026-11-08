@@ -40,6 +40,7 @@ Identify:
 - desired business outcome;
 - required or described system behavior;
 - business rules;
+- data validation conditions (validation rules);
 - interactions;
 - acceptance conditions;
 - existing functionality;
@@ -52,6 +53,38 @@ Identify:
 Do not immediately create or modify artifacts.
 
 Separate what is known from what is inferred or unknown.
+
+### Identify Data Validation Conditions
+
+Identify conditions that determine whether individual data values or combinations of data are valid and acceptable.
+
+Look for:
+
+- Required and optional fields.
+- Allowed values and value ranges.
+- Minimum and maximum lengths.
+- Data formats and patterns.
+- Numeric and date constraints.
+- Relationships and consistency between fields.
+- Business-related conditions that impose restrictions on data values or combinations of data.
+- Context-dependent validation conditions, including conditions that depend on entity type, status, user role or operation.
+- Conditions that determine whether submitted data is valid.
+
+For each identified condition, extract:
+
+- The entity and attribute(s) to which it applies.
+- The applicable operation or context (e.g. create, update, import).
+- The exact validity condition.
+- Dependencies on other data attributes or entity states.
+- Boundary conditions and exceptions, if specified.
+- Normalization or transformation applied before validation, if specified.
+- Any unresolved details that require clarification.
+
+Distinguish data validity conditions from system behavior when data is invalid. Identify both separately.
+
+Do not infer unspecified validation behavior, boundary semantics or normalization rules. Record missing details as assumptions or Open Questions, as appropriate.
+
+Do not assume that every identified condition must become a separate Validation Rule artifact. Artifact classification and the decision to create a reusable VR are handled in subsequent workflow steps.
 
 ---
 
@@ -75,6 +108,10 @@ Use these questions:
 
 **What business policy, constraint, condition or decision logic applies?**
 
+### Validation Rule
+
+**What conditions determine whether a value or a set of data is valid and acceptable?**
+
 ### Use Case
 
 **What actor-system interaction achieves a goal?**
@@ -89,6 +126,21 @@ Use these questions:
 
 Do not force a request into exactly one artifact type.
 
+### Distinguishing Business Rules, Validation Rules and Functional Requirements
+
+- Business Rule (BRL) defines business policies, restrictions, conditions and decision logic.
+- Validation Rule (VR) defines conditions that determine whether data is valid.
+- Functional Requirement (FR) defines how the system behaves, including how it applies business and validation rules.
+
+A VR defines the validity condition itself.
+An FR defines the system behavior when applying that condition, including the response to valid and invalid data.
+
+A condition may have business significance and also define data validity. Classify it according to its primary semantic purpose. Do not create duplicate BRL and VR artifacts for the same condition.
+
+Do not classify a rule based only on words such as "must", "must not", "minimum", "maximum" or "only if". Classify it based on its meaning.
+
+Classifying information as a Validation Rule does not automatically mean that a separate VR artifact must be created. Artifact creation decisions are handled during subsequent workflow steps.
+
 ---
 
 ## 1.3 Search
@@ -102,10 +154,13 @@ Search for:
 - related Business Requirements;
 - related Functional Requirements;
 - related Business Rules;
+- related Validation Rules;
 - related Use Cases;
 - related Acceptance Criteria;
 - related Open Questions;
 - relevant glossary terms.
+
+Search by semantic meaning, not only by exact wording or artifact title. Consider synonyms, alternative formulations and equivalent conditions.
 
 Determine whether the request represents:
 
@@ -119,6 +174,29 @@ Determine whether the request represents:
 - an unresolved question.
 
 Do not create duplicate artifacts merely because the user used different wording.
+
+For existing artifacts considered for modification, identify their related artifacts and potential impact.
+
+### Reuse Existing Validation Rules
+
+Before creating a new Validation Rule:
+
+1. Search for existing VR artifacts that define the same or equivalent validation condition.
+2. Check whether an existing VR can be reused.
+3. When considering reuse, compare:
+   - the entity and attributes to which it applies;
+   - applicable operations and contexts;
+   - applicability conditions;
+   - validation criteria and boundary conditions;
+   - normalization rules and exceptions.
+4. Check whether the proposed rule conflicts with an existing VR.
+5. If an existing VR applies, reference it instead of creating a duplicate.
+6. If an existing VR defines the same validation condition but has a narrower scope, consider extending the existing VR instead of creating a new one.
+7. Create a new VR only when the validation condition is genuinely new or requires an independently maintained definition.
+
+Do not extend the scope of an existing VR without confirming that the change is consistent with the intended business behavior.
+
+Never create duplicate Validation Rules merely because the same validation condition is used by different Functional Requirements or Use Cases.
 
 ---
 
@@ -179,6 +257,16 @@ After the required confirmation:
 
 Do not change source code or implementation unless explicitly requested.
 
+### Validation Rule References
+
+When creating or updating artifacts:
+
+- Add references to applicable VR artifacts.
+- Use the `constrained-by` relationship between FR/UC and VR.
+- Add reciprocal references where required by the repository conventions.
+- Update affected artifacts when a Validation Rule changes.
+- Preserve existing VR identifiers when modifying their definitions.
+
 ---
 
 ## 1.7 Validate
@@ -198,6 +286,7 @@ After applying changes, validate:
 - IDs;
 - status;
 - change history;
+- duplicate artifacts and duplicated rule definitions;
 - repository structure.
 
 If a validation issue requires a business decision, create or update an Open Question instead of silently choosing an answer.
@@ -207,6 +296,27 @@ See:
 - `rules/requirement-quality.md`
 - `rules/relationships.md`
 - `rules/change-management.md`
+
+### Validation Rule Checks
+
+When validating artifacts, check that:
+
+- Validation Rules are classified correctly.
+- Reusable validation conditions are not duplicated.
+- Functional Requirements and Use Cases reference applicable VR artifacts whose scope and conditions cover the described behavior.
+- Validation Rules define data validity conditions, not system response behavior.
+- Each Validation Rule sufficiently specifies, where applicable:
+  - the entity and attributes to which it applies;
+  - applicable operations and contexts;
+  - the exact validity condition;
+  - boundary conditions;
+  - dependencies on other attributes or entity states;
+  - normalization or transformation applied before validation;
+  - handling of null, empty and whitespace values.
+- Unresolved validation details that materially affect the interpretation or implementation of the rule are recorded as Open Questions.
+- Changes to VR artifacts are reflected in the impact analysis.
+- Functional Requirements correctly define system behavior when applying Validation Rules, including the response to invalid data.
+- Related Functional Requirements and Acceptance Criteria remain consistent with the Validation Rules.
 
 ---
 
@@ -232,6 +342,40 @@ If the request contains unresolved business meaning, stop at Propose/Ask rather 
 
 Do not over-document trivial changes.
 
+## Reusable Validation Rules
+
+Validation Rules must be maintained as reusable artifacts
+when the same validation condition is used by multiple
+Functional Requirements or Use Cases.
+
+### Principles
+
+- Define a reusable validation condition only once.
+- Store each Validation Rule in `requirements/validation-rules/`.
+- Reference existing VR artifacts from Functional Requirements
+  and Use Cases.
+- Do not copy the full validation condition into every related
+  artifact.
+- When a validation condition changes, update its VR artifact
+  and analyze the impact on all related artifacts.
+- Do not assume that changing a Validation Rule automatically
+  changes the required system behavior. Review related Functional
+  Requirements and Acceptance Criteria separately.
+
+### Example
+
+VR-0001 — Customer name length
+
+Defines the maximum allowed length of a customer name.
+
+Referenced by:
+- FR-0001 — Create customer
+- FR-0002 — Update customer
+- UC-0003 — Manage customer
+
+All related artifacts must reference VR-0001 rather than
+redefine the validation condition.
+
 ---
 
 # 2. Artifact model
@@ -246,6 +390,7 @@ The analysis model contains the following artifact types:
 | Use Case | `UC-XXXX` | Actor-system interaction achieving a goal |
 | Acceptance Criteria | `AC-XXXX` | Observable conditions for acceptance |
 | Open Question | `OQ-XXXX` | Unresolved information requiring clarification |
+| Validation Rule | `VR-XXXX` | Define conditions that determine whether a value or a set of data is valid and acceptable |
 
 Glossary terms are maintained separately in `requirements/glossary.md`.
 
@@ -422,7 +567,26 @@ The Business Rule explains the business constraint; the Functional Requirement d
 
 ---
 
-# 8. Acceptance Criteria
+# 8. Validation Rule (VR)
+
+A Validation Rule defines data validity conditions, not the system behavior when those conditions are violated.
+
+Purpose:
+Define conditions that determine whether a value or a set of data is valid and acceptable.
+
+Answers:
+>"What data is considered valid?"
+
+Example:
+>"The company name must not exceed 100 characters."
+
+A Validation Rule defines the validation condition itself.
+It does not define how the system responds when the condition is violated.
+System behavior must be specified in a Functional Requirement.
+
+---
+
+# 9. Acceptance Criteria
 
 Acceptance Criteria define observable conditions used to determine whether related behavior is acceptable.
 
@@ -447,7 +611,7 @@ Write Acceptance Criteria in a table format where one row is one criterion. Use 
 
 ---
 
-# 9. Open Questions
+# 10. Open Questions
 
 Open Questions represent unresolved information required for analysis or decision-making.
 
@@ -467,7 +631,7 @@ An Open Question may have possible options, but possible options are not decisio
 
 ---
 
-# 10. Glossary
+# 11. Glossary
 
 `requirements/glossary.md` is the shared vocabulary for the requirements model.
 
@@ -483,7 +647,7 @@ The glossary is part of terminology consistency, not a substitute for requiremen
 
 ---
 
-# 11. Requirements index
+# 12. Requirements index
 
 `requirements/index.md` is a navigation index.
 
@@ -506,7 +670,7 @@ Do not treat information present only in the index as authoritative if the corre
 
 ---
 
-# 12. Change management
+# 13. Change management
 
 Before changing an artifact, inspect related artifacts.
 
@@ -547,7 +711,7 @@ See `rules/change-management.md`.
 
 ---
 
-# 13. Approved artifact changes
+# 14. Approved artifact changes
 
 An `Approved` artifact represents explicitly accepted behavior or analysis.
 
@@ -563,7 +727,7 @@ Do not mark an artifact `Approved` automatically.
 
 ---
 
-# 14. Contradictions
+# 15. Contradictions
 
 When artifacts contradict one another:
 
@@ -575,7 +739,7 @@ When artifacts contradict one another:
 
 ---
 
-# 15. Terminology
+# 16. Terminology
 
 Use terminology consistently across:
 
@@ -590,7 +754,7 @@ If the user's terminology conflicts with an established glossary term, do not si
 
 ---
 
-# 16. Source code and implementation
+# 17. Source code and implementation
 
 Source code, database structures, APIs and UI elements can be evidence during analysis.
 
@@ -609,7 +773,7 @@ Do not change implementation when the user asks only for requirements analysis u
 
 ---
 
-# 17. IDs
+# 18. IDs
 
 Use stable IDs:
 
@@ -619,6 +783,7 @@ Use stable IDs:
 - `UC-XXXX`
 - `AC-XXXX`
 - `OQ-XXXX`
+- `VR-XXXX`
 
 IDs must:
 
@@ -630,7 +795,7 @@ Do not change an ID merely because the title changes.
 
 ---
 
-# 18. Status
+# 19. Status
 
 Allowed statuses:
 
@@ -657,7 +822,7 @@ A materially changed Approved artifact normally returns to `Proposed` until the 
 
 ---
 
-# 19. Final response
+# 20. Final response
 
 After completing an analysis operation, briefly report:
 
