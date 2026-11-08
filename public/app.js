@@ -2,7 +2,7 @@ import { api } from './modules/api.js';
 import { loadConfig as fetchConfig } from './modules/config.js';
 
 const app = document.querySelector('#app');
-const state = { user: null, projects: [], requirements: [], groups: [], releases: [], selectedGroupId: '', filters: { projectId: '', search: '', type: [], priority: [], status: [], complexity: [], release: [] }, sort: { key: null, direction: 0 } };
+const state = { user: null, projects: [], requirements: [], groups: [], releases: [], selectedGroupId: '', projectSelectionRequired: false, filters: { projectId: '', search: '', type: [], priority: [], status: [], complexity: [], release: [] }, sort: { key: null, direction: 0 } };
 let statuses = [];
 let types = [];
 let priorities = [];
@@ -116,10 +116,10 @@ function renderLogin(error = '', notice = '') {
 async function loadConfig() {
   const values = await fetchConfig(api);
   statuses = values.statuses;
-  types = values.types;
+  types = (await api('/api/requirement-types')).types;
   priorities = values.priorities;
   complexities = values.complexities;
-  sortOrders = { type: values.types.map((type) => type.id), priority: values.priorities.slice().reverse() };
+  sortOrders = { type: types.map((type) => type.id), priority: values.priorities.slice().reverse() };
   state.projects = (await api('/api/projects')).projects;
 }
 async function loadGroups() {
@@ -128,8 +128,9 @@ async function loadGroups() {
 }
 async function loadApp() {
   await loadConfig();
-  if (!state.projects.some((project) => project.id === state.filters.projectId)) state.filters.projectId = state.projects[0]?.id || '';
-  if (state.projects.length) {
+  if (state.projectSelectionRequired) state.filters.projectId = '';
+  else if (!state.projects.some((project) => project.id === state.filters.projectId)) state.filters.projectId = state.projects[0]?.id || '';
+  if (state.projects.length && state.filters.projectId) {
     await loadGroups();
     await loadRequirements();
   } else {
@@ -165,12 +166,13 @@ async function loadRequirements() {
   sortRequirements();
 }
 function userMenu() {
-  const adminMenu = state.user.role === 'Администратор' ? '<div class="user-submenu"><button type="button" class="user-submenu-toggle" id="admin-menu-toggle" aria-expanded="false" aria-controls="admin-submenu">Администрирование<span class="submenu-chevron" aria-hidden="true">›</span></button><div class="user-submenu-list" id="admin-submenu" hidden><button type="button" id="users-link">Пользователи и права</button><button type="button" id="prefixes-link">Префиксы требований</button><button type="button" id="link-types-link">Типы связей</button></div></div>' : '';
+  const adminMenu = state.user.role === 'Администратор' ? '<div class="user-submenu"><button type="button" class="user-submenu-toggle" id="admin-menu-toggle" aria-expanded="false" aria-controls="admin-submenu">Администрирование<span class="submenu-chevron" aria-hidden="true">›</span></button><div class="user-submenu-list" id="admin-submenu" hidden><button type="button" id="users-link">Пользователи и права</button><button type="button" id="projects-link">Проекты</button><button type="button" id="prefixes-link">Префиксы требований</button><button type="button" id="requirement-types-link">Типы требований</button><button type="button" id="link-types-link">Типы связей</button></div></div>' : '';
   return `<details class="user-menu"><summary><span class="avatar">${esc((state.user.name || 'A')[0])}</span><span>${esc(state.user.name)}</span><span class="menu-chevron" aria-hidden="true">⌄</span></summary><div class="user-menu-list"><button type="button" id="profile-link">Профиль</button>${adminMenu}<button type="button" id="logout">Выйти</button></div></details>`;
 }
 function projectPicker() {
   if (!state.projects.length) return '';
-  return `<div class="topbar-project field"><label for="project">Активный проект</label><select id="project">${state.projects.map((item) => `<option value="${item.id}" ${item.id === state.filters.projectId ? 'selected' : ''}>${esc(item.code)} · ${esc(item.name)}</option>`).join('')}</select></div>`;
+  const placeholder = state.filters.projectId ? '' : '<option value="" selected>Выберите проект</option>';
+  return `<div class="topbar-project field"><label for="project">Активный проект</label><select id="project">${placeholder}${state.projects.map((item) => `<option value="${item.id}" ${item.id === state.filters.projectId ? 'selected' : ''}>${esc(item.code)} · ${esc(item.name)}</option>`).join('')}</select></div>`;
 }
 function bindUserMenu() {
   const userMenuElement = document.querySelector('.user-menu');
@@ -213,19 +215,29 @@ function bindUserMenu() {
   }
   document.querySelector('#profile-link').onclick = () => renderProfile();
   document.querySelector('#users-link')?.addEventListener('click', () => renderUsers());
+  document.querySelector('#projects-link')?.addEventListener('click', () => renderProjectSettings());
   document.querySelector('#prefixes-link')?.addEventListener('click', () => renderPrefixSettings());
+  document.querySelector('#requirement-types-link')?.addEventListener('click', () => renderRequirementTypeSettings());
   document.querySelector('#link-types-link')?.addEventListener('click', () => renderRequirementLinkTypes());
   document.querySelector('#logout').onclick = async () => { await api('/api/auth/logout', { method: 'POST' }); state.user = null; renderLogin(); };
 }
 function bindProjectPicker() {
   const picker = document.querySelector('#project');
   if (!picker) return;
-  picker.onchange = async (event) => { state.filters.projectId = event.target.value; state.selectedGroupId = ''; await loadGroups(); await refresh(); };
+  picker.onchange = async (event) => {
+    const projectId = event.target.value;
+    if (!projectId) return;
+    state.filters.projectId = projectId;
+    state.projectSelectionRequired = false;
+    state.selectedGroupId = '';
+    await loadGroups();
+    await refresh();
+  };
 }
 function bindPrefixProjectPicker() {
   const picker = document.querySelector('#project');
   if (!picker) return;
-  picker.onchange = async (event) => { state.filters.projectId = event.target.value; await renderPrefixSettings(); };
+  picker.onchange = async (event) => { if (!event.target.value) return; state.filters.projectId = event.target.value; state.projectSelectionRequired = false; await renderPrefixSettings(); };
 }
 function renderProfile(message = '') {
   app.innerHTML = `<div class="shell"><header class="topbar"><div class="topbar-start"><div class="brand">RMS<span>.</span></div>${projectPicker()}</div>${userMenu()}</header><main class="content profile-content"><div class="profile-heading"><div><p class="eyebrow">Личная информация</p><h1>Профиль пользователя</h1></div><button class="clear" id="back-to-requirements">К требованиям</button></div>${message ? `<p class="error profile-message" role="alert">${esc(message)}</p>` : ''}<section class="profile-card"><div class="profile-avatar">${esc((state.user.name || 'A')[0])}</div><div class="profile-details"><div><span class="profile-label">Имя</span><strong>${esc(state.user.name)}</strong></div><div><span class="profile-label">Логин</span><strong>${esc(state.user.username)}</strong></div><div><span class="profile-label">Роль</span><strong>${esc(state.user.role)}</strong></div><div><span class="profile-label">Идентификатор</span><strong>${esc(state.user.id)}</strong></div><div class="profile-actions"><button class="clear" id="change-password">Изменить пароль</button></div></div></section></main></div>`;
@@ -284,6 +296,11 @@ function renderNoProjects() {
     : 'У вашей учётной записи нет доступа ни к одному проекту. Обратитесь к администратору, чтобы он назначил проект.';
   app.innerHTML = `<div class="shell"><header class="topbar"><div class="topbar-start"><div class="brand">RMS<span>.</span></div></div>${userMenu()}</header><main class="content"><section class="access-denied"><p class="eyebrow">Доступ к проектам</p><h1>${isAdmin ? 'Проекты не настроены' : 'Нет доступных проектов'}</h1><p>${esc(message)}</p></section></main></div>`;
   bindUserMenu();
+}
+function renderNoActiveProject() {
+  app.innerHTML = `<div class="shell"><header class="topbar"><div class="topbar-start"><div class="brand">RMS<span>.</span></div>${projectPicker()}</div>${userMenu()}</header><main class="content"><section class="access-denied"><p class="eyebrow">Активный проект</p><h1>Проект не выбран</h1><p>Выберите проект в списке «Активный проект», чтобы просмотреть его требования и группы.</p></section></main></div>`;
+  bindUserMenu();
+  bindProjectPicker();
 }
 function loadRequirementColumnWidths() {
   const userId = state.user?.id || state.user?.username || 'guest';
@@ -433,6 +450,105 @@ async function renderUsers() {
   document.querySelector('#add-user').onclick = () => openUserModal();
   document.querySelectorAll('.user-edit').forEach((button) => { button.onclick = () => openUserModal(result.users.find((item) => item.id === button.dataset.id)); });
   document.querySelectorAll('.user-delete').forEach((button) => { button.onclick = () => deleteUser(button.dataset.id); });
+}
+async function renderProjectSettings() {
+  await loadConfig();
+  const projects = state.projects;
+  app.innerHTML = `<div class="shell"><header class="topbar"><div class="topbar-start"><div class="brand">RMS<span>.</span></div>${projectPicker()}</div>${userMenu()}</header><main class="content"><div class="profile-heading"><div><p class="eyebrow">Администрирование</p><h1>Проекты</h1><p class="page-note">Код проекта используется как префикс номеров требований, если для пары «проект — тип» не настроен отдельный префикс.</p></div><div class="heading-actions"><button class="clear" id="back-to-requirements">← К требованиям</button><button class="primary" id="add-project">+ Новый проект</button></div></div><div class="table-wrap"><table class="projects-table"><thead><tr><th>Название</th><th>Код</th><th></th></tr></thead><tbody>${projects.length ? projects.map((item) => `<tr><td class="description">${esc(item.name)}</td><td>${esc(item.code)}</td><td><div class="actions"><button class="icon-button project-edit" data-id="${esc(item.id)}" title="Редактировать проект">✎</button><button class="icon-button delete project-delete" data-id="${esc(item.id)}" title="Удалить проект">×</button></div></td></tr>`).join('') : '<tr><td colspan="3" class="empty">Проекты не настроены</td></tr>'}</tbody></table></div><p class="error" id="projects-error" role="alert"></p></main></div>`;
+  bindUserMenu(); bindProjectPicker();
+  document.querySelector('#back-to-requirements').onclick = () => renderApp();
+  document.querySelector('#add-project').onclick = () => openProjectModal();
+  document.querySelectorAll('.project-edit').forEach((button) => {
+    button.onclick = () => openProjectModal(projects.find((item) => item.id === button.dataset.id));
+  });
+  document.querySelectorAll('.project-delete').forEach((button) => {
+    button.onclick = () => deleteProject(button.dataset.id);
+  });
+}
+function openProjectModal(item = null) {
+  document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop" id="project-modal"><form class="modal compact-modal" id="project-form"><div class="modal-header"><div><p class="eyebrow">${item ? 'Редактирование' : 'Новый проект'}</p>${item ? '' : '<h2>Создать проект</h2>'}</div><button type="button" class="close" id="project-close" aria-label="Закрыть">×</button></div><div class="field"><label for="project-name">Название *</label><input id="project-name" name="name" required maxlength="200" value="${esc(item?.name || '')}"></div><div class="field"><label for="project-code">Код *</label><input id="project-code" name="code" required maxlength="20" value="${esc(item?.code || '')}" placeholder="Например, ANL"><p class="field-hint">До 20 символов: буквы, цифры, «_» или «-». Код можно изменить, только пока в проекте нет требований и групп.</p></div><p class="error" id="project-form-error" role="alert"></p><div class="modal-actions"><button type="button" class="cancel" id="project-cancel">Отмена</button><button class="primary">${item ? 'Сохранить изменения' : 'Создать проект'}</button></div></form></div>`);
+  const modal = document.querySelector('#project-modal');
+  const close = () => modal.remove();
+  document.querySelector('#project-close').onclick = close;
+  document.querySelector('#project-cancel').onclick = close;
+  document.querySelector('#project-form').onsubmit = async (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const body = { name: form.get('name'), code: form.get('code') };
+    try {
+      await api(item ? `/api/projects/${item.id}` : '/api/projects', { method: item ? 'PUT' : 'POST', body: JSON.stringify(body) });
+      close();
+      await renderProjectSettings();
+    } catch (error) {
+      document.querySelector('#project-form-error').textContent = error.message;
+    }
+  };
+}
+async function deleteProject(id) {
+  const project = state.projects.find((item) => item.id === id);
+  if (!confirm(`Удалить проект «${project?.name || ''}»? Удалить можно только проект без требований и групп.`)) return;
+  try {
+    await api(`/api/projects/${id}`, { method: 'DELETE' });
+    const wasActive = state.filters.projectId === id;
+    await loadConfig();
+    if (wasActive) {
+      state.filters.projectId = '';
+      state.projectSelectionRequired = true;
+      state.selectedGroupId = '';
+      state.groups = [];
+      state.requirements = [];
+      state.releases = [];
+      renderApp();
+      return;
+    }
+    await renderProjectSettings();
+  } catch (error) {
+    document.querySelector('#projects-error').textContent = error.message;
+  }
+}
+async function renderRequirementTypeSettings() {
+  const result = await api('/api/requirement-types');
+  types = result.types;
+  sortOrders = { ...sortOrders, type: types.map((type) => type.id) };
+  app.innerHTML = `<div class="shell"><header class="topbar"><div class="topbar-start"><div class="brand">RMS<span>.</span></div>${projectPicker()}</div>${userMenu()}</header><main class="content"><div class="profile-heading"><div><p class="eyebrow">Администрирование</p><h1>Типы требований</h1><p class="page-note">Тип, который используется хотя бы одним требованием, нельзя удалить; его название изменить можно.</p></div><div class="heading-actions"><button class="clear" id="back-to-requirements">← К требованиям</button><button class="primary" id="add-requirement-type">+ Новый тип</button></div></div><div class="table-wrap"><table class="requirement-types-table"><thead><tr><th>Название</th><th></th></tr></thead><tbody>${types.length ? types.map((item) => `<tr><td class="description">${esc(item.name)}</td><td><div class="actions"><button class="icon-button requirement-type-edit" data-id="${esc(item.id)}" title="Редактировать тип">✎</button><button class="icon-button delete requirement-type-delete" data-id="${esc(item.id)}" title="Удалить тип">×</button></div></td></tr>`).join('') : '<tr><td colspan="2" class="empty">Типы требований не настроены</td></tr>'}</tbody></table></div><p class="error" id="requirement-types-error" role="alert"></p></main></div>`;
+  bindUserMenu(); bindProjectPicker();
+  document.querySelector('#back-to-requirements').onclick = () => renderApp();
+  document.querySelector('#add-requirement-type').onclick = () => openRequirementTypeModal();
+  document.querySelectorAll('.requirement-type-edit').forEach((button) => {
+    button.onclick = () => openRequirementTypeModal(types.find((item) => item.id === button.dataset.id));
+  });
+  document.querySelectorAll('.requirement-type-delete').forEach((button) => {
+    button.onclick = () => deleteRequirementType(button.dataset.id);
+  });
+}
+function openRequirementTypeModal(item = null) {
+  document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop" id="requirement-type-modal"><form class="modal compact-modal" id="requirement-type-form"><div class="modal-header"><div><p class="eyebrow">${item ? 'Редактирование' : 'Новый тип'}</p>${item ? '' : '<h2>Создать тип требования</h2>'}</div><button type="button" class="close" id="requirement-type-close" aria-label="Закрыть">×</button></div><div class="field"><label for="requirement-type-name">Название *</label><input id="requirement-type-name" name="name" required maxlength="50" value="${esc(item?.name || '')}"><p class="field-hint">До 50 символов; название уникально без учёта регистра.</p></div><p class="error" id="requirement-type-form-error" role="alert"></p><div class="modal-actions"><button type="button" class="cancel" id="requirement-type-cancel">Отмена</button><button class="primary">${item ? 'Сохранить изменения' : 'Создать тип'}</button></div></form></div>`);
+  const modal = document.querySelector('#requirement-type-modal');
+  const close = () => modal.remove();
+  document.querySelector('#requirement-type-close').onclick = close;
+  document.querySelector('#requirement-type-cancel').onclick = close;
+  document.querySelector('#requirement-type-form').onsubmit = async (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const body = { name: form.get('name') };
+    try {
+      await api(item ? `/api/requirement-types/${item.id}` : '/api/requirement-types', { method: item ? 'PUT' : 'POST', body: JSON.stringify(body) });
+      close();
+      await renderRequirementTypeSettings();
+    } catch (error) {
+      document.querySelector('#requirement-type-form-error').textContent = error.message;
+    }
+  };
+}
+async function deleteRequirementType(id) {
+  const type = types.find((item) => item.id === id);
+  if (!confirm(`Удалить тип требования «${type?.name || ''}»? Удалить можно только тип, не используемый требованиями.`)) return;
+  try {
+    await api(`/api/requirement-types/${id}`, { method: 'DELETE' });
+    await renderRequirementTypeSettings();
+  } catch (error) {
+    document.querySelector('#requirement-types-error').textContent = error.message;
+  }
 }
 async function renderPrefixSettings() {
   const result = await api('/api/requirement-prefixes');
@@ -651,6 +767,7 @@ function bindGroups() {
 }
 function renderApp() {
   if (!state.projects.length) { renderNoProjects(); return; }
+  if (state.projectSelectionRequired || !state.filters.projectId) { renderNoActiveProject(); return; }
   app.innerHTML = `<div class="shell"><header class="topbar"><div class="topbar-start"><div class="brand">RMS<span>.</span></div>${projectPicker()}</div>${userMenu()}</header><main class="content"><div class="heading"><div><h1>Требования</h1><p class="page-note">Группируйте требования в иерархию без ограничения вложенности.</p></div></div><div class="toolbar"><div class="field project-field"><label for="search">Поиск</label><input id="search" placeholder="Номер, описание или тип" value="${esc(state.filters.search)}"></div>${multiFilter('type', 'Тип', types)}${multiFilter('priority', 'Важность', priorities)}${multiFilter('complexity', 'Сложность', complexities)}${multiFilter('status', 'Статус', statuses)}${multiFilter('release', 'Релиз', state.releases)}<button class="clear" id="clear">Сбросить</button>${can('create') ? '<button class="primary" id="add">+ Новое требование</button>' : ''}</div><div class="requirements-layout"><aside class="groups-panel"><div class="groups-heading"><strong>Группы</strong><div class="groups-heading-actions">${can('create') ? '<button class="link-button" id="add-group">+ Новая группа</button>' : ''}<button class="link-button" id="all-groups">Все</button></div></div><ul class="group-tree">${groupTree()}</ul>${!state.groups.length ? '<p class="muted">Групп пока нет</p>' : ''}</aside><div class="splitter" id="splitter"></div><div class="table-wrap"><table><thead><tr><th>Номер</th><th>Краткое описание</th><th>Группа</th><th>Тип</th><th>Важность</th><th>Сложность</th><th>Статус</th><th>Релиз</th><th></th></tr></thead><tbody>${state.requirements.length ? state.requirements.map((item) => `<tr><td>${can('read') ? `<button class="requirement-number ${can('update') ? 'edit' : 'view'}" data-id="${esc(item.id)}" title="${can('update') ? 'Редактировать требование' : 'Просмотреть требование'}">${esc(item.number)}</button>` : esc(item.number)}</td><td class="description">${esc(item.description)}</td><td>${esc(state.groups.find((group) => group.id === item.groupId)?.name || 'Без группы')}</td><td>${esc(requirementTypeName(item.type))}</td><td>${badge(item.priority)}</td><td>${badge(item.complexity)}</td><td>${badge(item.status)}</td><td>${esc(item.release)}</td><td><div class="actions">${can('update') ? `<button class="icon-button edit" data-id="${esc(item.id)}" title="Редактировать">✎</button>` : ''}${can('delete') ? `<button class="icon-button delete-requirement" data-id="${esc(item.id)}" title="Удалить">×</button>` : ''}</div></td></tr>`).join('') : `<tr><td colspan="9" class="empty">В выбранной области нет требований</td></tr>`}</tbody></table></div></div></main></div>`;
   initRequirementTable();
   bindUserMenu();

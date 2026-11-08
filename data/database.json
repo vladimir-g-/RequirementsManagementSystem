@@ -390,5 +390,35 @@
       "requirementBId": "f1b3f803-3dfb-4140-9d75-9b3d6e4090e3",
       "typeId": "link-related-to"
     }
+  ],
+  "types": [
+    {
+      "id": "functional",
+      "name": "Функциональное"
+    },
+    {
+      "id": "non-functional",
+      "name": "Нефункциональное"
+    },
+    {
+      "id": "security",
+      "name": "Безопасность"
+    },
+    {
+      "id": "integration",
+      "name": "Интеграционное"
+    },
+    {
+      "id": "use-case",
+      "name": "Сценарий использования"
+    },
+    {
+      "id": "user-story",
+      "name": "Пользовательская история"
+    },
+    {
+      "id": "business-requirement",
+      "name": "Бизнес требование"
+    }
   ]
 }

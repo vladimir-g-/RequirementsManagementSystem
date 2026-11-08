@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Requirements Management System API
-  description: API серверной части системы управления требованиями, включая самостоятельную смену пароля, каталог типов связей и связи требований.
+  description: API серверной части системы управления требованиями, включая управление проектами и типами требований, самостоятельную смену пароля, каталог типов связей и связи требований.
   version: 1.2.0
   license:
     name: Proprietary
@@ -17,6 +17,8 @@ tags:
     description: Иерархические группы требований
   - name: Projects
     description: Проекты, доступные пользователю
+  - name: Requirement types
+    description: Общий справочник типов требований (управление только администратором)
   - name: Requirements
     description: Требования
   - name: Requirement prefixes
@@ -31,6 +33,7 @@ paths:
       tags: [Auth]
       summary: Войти в систему
       operationId: login
+      security: []
       requestBody:
         required: true
         content:
@@ -114,6 +117,7 @@ paths:
       tags: [Auth]
       summary: Получить текущего пользователя
       operationId: getCurrentUser
+      security: []
       responses:
         '200':
           description: Текущий пользователь или null, если сессия отсутствует
@@ -138,7 +142,7 @@ paths:
         - sessionCookie: []
       responses:
         '200':
-          description: Справочники, загруженные из конфигурации приложения
+          description: Статусы, важность и сложность. Проекты возвращаются через /api/projects, типы требований — через /api/requirement-types.
           content:
             application/json:
               schema:
@@ -168,6 +172,236 @@ paths:
                       $ref: '#/components/schemas/Project'
         '401':
           $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Projects]
+      summary: Создать проект
+      description: Доступно только администратору. Название и код уникальны без учёта регистра.
+      operationId: createProject
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectWrite'
+      responses:
+        '201':
+          description: Проект создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponse'
+        '400':
+          description: Название или код пусты, превышают допустимую длину либо не уникальны; код содержит недопустимые символы
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AdminRequired'
+
+  /api/projects/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    put:
+      tags: [Projects]
+      summary: Изменить проект
+      description: Доступно только администратору. Код можно изменить только пока в проекте нет требований и групп.
+      operationId: updateProject
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectUpdate'
+      responses:
+        '200':
+          description: Проект изменён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponse'
+        '400':
+          description: Название или новый код не прошли проверку
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AdminRequired'
+        '404':
+          description: Проект не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Код проекта нельзя изменить, пока в проекте есть требования или группы
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags: [Projects]
+      summary: Удалить проект
+      description: Доступно только администратору. При удалении очищаются назначения пользователей и настройки префиксов проекта.
+      operationId: deleteProject
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Проект удалён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AdminRequired'
+        '404':
+          description: Проект не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Нельзя удалить проект, пока в нём есть требования или группы
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/requirement-types:
+    get:
+      tags: [Requirement types]
+      summary: Получить типы требований
+      description: Доступно любому аутентифицированному пользователю для выбора при создании и изменении требований. Изменять справочник может только администратор.
+      operationId: listRequirementTypes
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Типы требований из управляемого системного справочника
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [types]
+                properties:
+                  types:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RequirementType'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Requirement types]
+      summary: Создать тип требования
+      description: Название обязательно, не длиннее 50 символов и уникально без учёта регистра. Доступно только администратору.
+      operationId: createRequirementType
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequirementTypeWrite'
+      responses:
+        '201':
+          description: Тип требования создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementTypeResponse'
+        '400':
+          description: Некорректное или уже используемое название типа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AdminRequired'
+
+  /api/requirement-types/{id}:
+    parameters:
+      - $ref: '#/components/parameters/RequirementTypeId'
+    put:
+      tags: [Requirement types]
+      summary: Изменить тип требования
+      description: Название можно изменить, даже если тип используется. Идентификатор типа и настройки префиксов сохраняются. Доступно только администратору.
+      operationId: updateRequirementType
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequirementTypeWrite'
+      responses:
+        '200':
+          description: Тип требования изменён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementTypeResponse'
+        '400':
+          description: Некорректное или уже используемое название типа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AdminRequired'
+        '404':
+          description: Тип требования не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags: [Requirement types]
+      summary: Удалить тип требования
+      description: Удалить можно только тип, не используемый требованиями. Настройки префиксов для этого типа во всех проектах удаляются. Доступно только администратору.
+      operationId: deleteRequirementType
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Тип требования удалён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AdminRequired'
+        '404':
+          description: Тип требования не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Тип требования используется и не может быть удалён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /api/groups:
     get:
@@ -210,7 +444,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GroupRequest'
+              $ref: '#/components/schemas/GroupCreateRequest'
       responses:
         '201':
           description: Группа создана
@@ -395,6 +629,49 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/AdminRequired'
+
+  /api/requirement-link-options:
+    get:
+      tags: [Requirement links]
+      summary: Получить типы связей для создания требования
+      description: Совместимый маршрут для выбора связей при создании требования. Требуются права create и read в проекте.
+      operationId: getRequirementLinkOptionsForCreation
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: projectId
+          in: query
+          required: true
+          description: Идентификатор проекта, для которого загружается каталог типов связей
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Каталог типов связей
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [types]
+                properties:
+                  types:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RequirementLinkType'
+        '400':
+          description: Указан неизвестный проект
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Для выбора связанных требований нужны права создания и чтения в проекте
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /api/requirement-link-types:
     get:
@@ -691,13 +968,13 @@ paths:
               $ref: '#/components/schemas/RequirementWrite'
       responses:
         '201':
-          description: Требование создано; номер формируется сервером
+          description: Требование создано; номер формируется сервером, а переданные связи создаются в той же операции
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RequirementResponse'
+                $ref: '#/components/schemas/RequirementCreateResponse'
         '400':
-          description: Не указана версия требования или не заполнены обязательные поля/переданы значения вне справочников
+          description: Не заполнены обязательные поля, переданы значения вне справочников или некорректны группа/связи
           content:
             application/json:
               schema:
@@ -715,7 +992,7 @@ paths:
     get:
       tags: [Requirement links]
       summary: Найти требование для связывания
-      description: Поиск ограничен проектом исходного требования, исключает само исходное требование и возвращает не более 20 совпадений. Требуются права read и update.
+      description: Поиск ограничен проектом. При передаче excludeId исключает исходное требование и требует права read и update; без excludeId используется при создании требования и требует права create и read. Возвращается не более 20 совпадений.
       operationId: searchRequirementsForLink
       security:
         - sessionCookie: []
@@ -728,8 +1005,8 @@ paths:
             type: string
         - name: excludeId
           in: query
-          required: true
-          description: Идентификатор исходного требования, исключаемого из результатов
+          required: false
+          description: Идентификатор исходного требования, исключаемого из результатов. Если не указан, поиск выполняется для создания требования.
           schema:
             type: string
         - name: search
@@ -755,7 +1032,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Для поиска нужны права read и update в проекте
+          description: При поиске для изменения нужны права read и update; при поиске для создания нужны права create и read в проекте
           content:
             application/json:
               schema:
@@ -1018,6 +1295,20 @@ components:
       description: Идентификатор группы
       schema:
         type: string
+    ProjectId:
+      name: id
+      in: path
+      required: true
+      description: Идентификатор проекта
+      schema:
+        type: string
+    RequirementTypeId:
+      name: id
+      in: path
+      required: true
+      description: Идентификатор типа требования
+      schema:
+        type: string
     ProjectIdQuery:
       name: projectId
       in: query
@@ -1169,7 +1460,7 @@ components:
       additionalProperties: false
     UserPublic:
       type: object
-      required: [id, username, name, role, projectIds, permissions]
+      required: [id, username, name, role, projectIds, projectPermissions]
       properties:
         id:
           type: string
@@ -1183,8 +1474,11 @@ components:
           type: array
           items:
             type: string
-        permissions:
-          $ref: '#/components/schemas/PermissionSet'
+        projectPermissions:
+          type: object
+          description: Права пользователя по проектам
+          additionalProperties:
+            $ref: '#/components/schemas/PermissionSet'
       additionalProperties: false
     UserWrite:
       type: object
@@ -1203,12 +1497,15 @@ components:
           type: array
           items:
             type: string
-        permissions:
-          $ref: '#/components/schemas/PermissionSet'
+        projectPermissions:
+          type: object
+          description: Права пользователя по проектам; неуказанные права новых назначений считаются false
+          additionalProperties:
+            $ref: '#/components/schemas/PermissionSet'
       additionalProperties: false
     UserUpdate:
       type: object
-      description: Все поля необязательны. Отсутствующие username, name, role и projectIds сохраняются; если permissions не передан, сервер сбрасывает все права в false.
+      description: Все поля необязательны. Отсутствующие username, name, role и projectIds сохраняются. projectPermissions задаёт права по каждому назначенному проекту.
       properties:
         username:
           type: string
@@ -1223,8 +1520,10 @@ components:
           type: array
           items:
             type: string
-        permissions:
-          $ref: '#/components/schemas/PermissionSet'
+        projectPermissions:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/PermissionSet'
       additionalProperties: false
     Role:
       type: string
@@ -1239,6 +1538,41 @@ components:
           type: string
         code:
           type: string
+      additionalProperties: false
+    ProjectWrite:
+      type: object
+      required: [name, code]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Название проекта, уникальное без учёта регистра
+        code:
+          type: string
+          pattern: '^[A-Za-zА-Яа-яЁё0-9_-]{1,20}$'
+          description: Уникальный без учёта регистра код длиной до 20 символов
+      additionalProperties: false
+    ProjectUpdate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Название проекта, уникальное без учёта регистра
+        code:
+          type: string
+          pattern: '^[A-Za-zА-Яа-яЁё0-9_-]{1,20}$'
+          description: Если передан, код можно изменить только для пустого проекта
+      additionalProperties: false
+    ProjectResponse:
+      type: object
+      required: [project]
+      properties:
+        project:
+          $ref: '#/components/schemas/Project'
       additionalProperties: false
     RequirementPrefix:
       type: object
@@ -1255,7 +1589,7 @@ components:
       additionalProperties: false
     Requirement:
       type: object
-      required: [id, number, description, detailsMarkdown, type, priority, complexity, status, release, projectId, version]
+      required: [id, number, description, detailsMarkdown, type, priority, complexity, status, release, projectId, groupId, version]
       properties:
         id:
           type: string
@@ -1283,6 +1617,10 @@ components:
         projectId:
           type: string
           readOnly: true
+        groupId:
+          type: string
+          nullable: true
+          description: Идентификатор группы или null
         version:
           type: integer
           minimum: 1
@@ -1312,6 +1650,15 @@ components:
         release:
           type: string
           default: ''
+        groupId:
+          type: string
+          nullable: true
+          description: Группа требования или null
+        links:
+          type: array
+          description: Связи с существующими требованиями того же проекта; создаются атомарно с требованием
+          items:
+            $ref: '#/components/schemas/RequirementCreationLink'
       additionalProperties: false
     RequirementUpdate:
       type: object
@@ -1337,6 +1684,10 @@ components:
           $ref: '#/components/schemas/Status'
         release:
           type: string
+        groupId:
+          type: string
+          nullable: true
+          description: Группа требования или null
       additionalProperties: false
     RequirementsResponse:
       type: object
@@ -1356,6 +1707,43 @@ components:
       properties:
         requirement:
           $ref: '#/components/schemas/Requirement'
+    RequirementCreateResponse:
+      type: object
+      required: [requirement, links]
+      properties:
+        requirement:
+          $ref: '#/components/schemas/Requirement'
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequirementLinkRecord'
+      additionalProperties: false
+    RequirementCreationLink:
+      type: object
+      required: [requirementId, typeId]
+      properties:
+        requirementId:
+          type: string
+          description: Идентификатор существующего требования того же проекта
+        typeId:
+          type: string
+          description: Идентификатор типа связи
+      additionalProperties: false
+    RequirementLinkRecord:
+      type: object
+      required: [id, projectId, requirementAId, requirementBId, typeId]
+      properties:
+        id:
+          type: string
+        projectId:
+          type: string
+        requirementAId:
+          type: string
+        requirementBId:
+          type: string
+        typeId:
+          type: string
+      additionalProperties: false
     RequirementLinkType:
       type: object
       required: [id, name, directed]
@@ -1522,7 +1910,7 @@ components:
           enum: [true]
     Config:
       type: object
-      required: [statuses, priorities, complexities, types, projects]
+      required: [statuses, priorities, complexities]
       properties:
         statuses:
           type: array
@@ -1536,14 +1924,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Complexity'
-        types:
-          type: array
-          items:
-            $ref: '#/components/schemas/RequirementType'
-        projects:
-          type: array
-          items:
-            $ref: '#/components/schemas/Project'
     RequirementType:
       type: object
       required: [id, name]
@@ -1553,11 +1933,30 @@ components:
           description: Постоянный идентификатор типа
         name:
           type: string
+          minLength: 1
+          maxLength: 50
           description: Отображаемое название типа
+      additionalProperties: false
+    RequirementTypeWrite:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: Название уникально без учёта регистра; пробелы по краям удаляются
+      additionalProperties: false
+    RequirementTypeResponse:
+      type: object
+      required: [type]
+      properties:
+        type:
+          $ref: '#/components/schemas/RequirementType'
       additionalProperties: false
     RequirementTypeId:
       type: string
-      description: Идентификатор типа из справочника types.json
+      description: Идентификатор типа из управляемого системного справочника типов требований
     Status:
       type: string
       enum: [Черновик, В работе, На проверке, На согласовании, Согласовано, Отменено]
@@ -1602,6 +2001,19 @@ components:
         projectId:
           type: string
           description: "Обязателен только при создании группы (POST /api/groups). При обновлении игнорируется."
+      additionalProperties: false
+    GroupCreateRequest:
+      type: object
+      required: [name, projectId]
+      properties:
+        name:
+          type: string
+          maxLength: 200
+        projectId:
+          type: string
+        parentId:
+          type: string
+          nullable: true
       additionalProperties: false
     GroupResponse:
       type: object

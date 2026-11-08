@@ -241,6 +241,8 @@ td:first-child { color: var(--teal); }
 .related-requirements-table td { padding: 11px 10px; }
 .related-requirements-empty { color: var(--muted); text-align: center; }
 .link-types-table { min-width: 560px; }
+.projects-table, .requirement-types-table { min-width: 520px; }
+.compact-modal { width: min(620px, 100%); }
 .link-type-modal { width: min(560px, 100%); }
 .modal-actions { display: flex; justify-content: end; gap: 10px; margin-top: 10px; }
 .cancel { border: 1px solid var(--line); border-radius: 7px; padding: 12px 18px; background: white; color: var(--muted); }
