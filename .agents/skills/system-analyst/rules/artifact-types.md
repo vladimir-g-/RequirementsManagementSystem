@@ -63,6 +63,24 @@ and use cases.
 
 ---
 
+## Validation Rule — VR
+
+A Validation Rule defines data validity conditions, not the system behavior when those conditions are violated.
+
+### Purpose
+
+Define conditions that determine whether a value or a set of data is valid and acceptable.
+
+### Answers
+
+> What data is considered valid?
+
+### Example
+
+> The company name must not exceed 100 characters.
+
+---
+
 ## Use Case — UC
 
 ### Purpose
