@@ -19,9 +19,9 @@ const config = {
   load: () => ({
     projects,
     types: [{ id: 'functional', name: 'Функциональное' }],
-    statuses: ['Новая'],
-    priorities: ['Средняя'],
-    complexities: []
+    statuses: [{ id: 'new', name: 'Новая' }],
+    priorities: [{ id: 'medium', name: 'Средняя' }],
+    complexities: [{ id: 'low', name: 'Низкая' }]
   })
 };
 const requirements = [
@@ -152,14 +152,21 @@ test('creates a requirement and its selected links atomically with create and re
   assert.deepEqual(search.payload.requirements.map((item) => item.id), ['requirement-b']);
   assert.equal((await server.request(createOnly, '/api/requirements/search?projectId=project-one&search=second')).status, 403);
 
+  const legacyNames = await server.request(creator, '/api/requirements', {
+    method: 'POST',
+    body: { projectId: 'project-one', description: 'Legacy values', type: 'functional', priority: 'Средняя', status: 'Новая' }
+  });
+  assert.equal(legacyNames.status, 400);
+
   const created = await server.request(creator, '/api/requirements', {
     method: 'POST',
     body: {
       projectId: 'project-one',
       description: 'New requirement',
       type: 'functional',
-      priority: 'Средняя',
-      status: 'Новая',
+      priority: 'medium',
+      status: 'new',
+      complexity: 'low',
       links: [
         { requirementId: 'requirement-a', typeId: 'link-based-on' },
         { requirementId: 'requirement-b', typeId: 'link-clarifies' }
@@ -168,6 +175,12 @@ test('creates a requirement and its selected links atomically with create and re
   });
   assert.equal(created.status, 201);
   const newRequirement = created.payload.requirement;
+  assert.equal(newRequirement.priority, 'medium');
+  assert.equal(newRequirement.status, 'new');
+  assert.equal(newRequirement.complexity, 'low');
+  assert.equal(server.store.data.requirements.find((item) => item.id === newRequirement.id).priority, 'medium');
+  const filteredById = await server.request(creator, '/api/requirements?projectId=project-one&priority=medium&status=new');
+  assert.ok(filteredById.payload.requirements.some((item) => item.id === newRequirement.id));
   assert.equal(created.payload.links.length, 2);
   assert.deepEqual(created.payload.links.map((link) => [link.requirementAId, link.requirementBId, link.typeId]), [
     [newRequirement.id, 'requirement-a', 'link-based-on'],
@@ -183,8 +196,8 @@ test('creates a requirement and its selected links atomically with create and re
       projectId: 'project-one',
       description: 'Must not be created',
       type: 'functional',
-      priority: 'Средняя',
-      status: 'Новая',
+      priority: 'medium',
+      status: 'new',
       links: [{ requirementId: 'requirement-b', typeId: 'link-clarifies' }]
     }
   });
@@ -197,8 +210,8 @@ test('creates a requirement and its selected links atomically with create and re
       projectId: 'project-one',
       description: 'Creation without read access',
       type: 'functional',
-      priority: 'Средняя',
-      status: 'Новая'
+      priority: 'medium',
+      status: 'new'
     }
   });
   assert.equal(createdWithoutLinks.status, 201);
@@ -212,8 +225,8 @@ test('creates a requirement and its selected links atomically with create and re
       projectId: 'project-one',
       description: 'Must not be partially created',
       type: 'functional',
-      priority: 'Средняя',
-      status: 'Новая',
+      priority: 'medium',
+      status: 'new',
       links: [{ requirementId: 'requirement-c', typeId: 'link-clarifies' }]
     }
   });
@@ -227,8 +240,8 @@ test('creates a requirement and its selected links atomically with create and re
       projectId: 'project-one',
       description: 'Duplicate links must be rejected',
       type: 'functional',
-      priority: 'Средняя',
-      status: 'Новая',
+      priority: 'medium',
+      status: 'new',
       links: [
         { requirementId: 'requirement-b', typeId: 'link-clarifies' },
         { requirementId: 'requirement-b', typeId: 'link-based-on' }
@@ -247,8 +260,8 @@ test('creates a requirement and its selected links atomically with create and re
       projectId: 'project-one',
       description: 'Must be rolled back',
       type: 'functional',
-      priority: 'Средняя',
-      status: 'Новая',
+      priority: 'medium',
+      status: 'new',
       links: [{ requirementId: 'requirement-b', typeId: 'link-clarifies' }]
     }
   });
@@ -327,7 +340,7 @@ test('requires read together with update and rejects stale requirement updates',
 
   const forbidden = await server.request(updater, '/api/requirements/requirement-a', {
     method: 'PUT',
-    body: { version: 1, description: 'Unauthorized update', type: 'functional', priority: 'Средняя', status: 'Новая' }
+    body: { version: 1, description: 'Unauthorized update', type: 'functional', priority: 'medium', status: 'new' }
   });
   assert.equal(forbidden.status, 403);
 
@@ -337,20 +350,20 @@ test('requires read together with update and rejects stale requirement updates',
 
   const missingVersion = await server.request(editor, '/api/requirements/requirement-a', {
     method: 'PUT',
-    body: { description: 'Unversioned update', type: 'functional', priority: 'Средняя', status: 'Новая' }
+    body: { description: 'Unversioned update', type: 'functional', priority: 'medium', status: 'new' }
   });
   assert.equal(missingVersion.status, 400);
 
   const firstUpdate = await server.request(editor, '/api/requirements/requirement-a', {
     method: 'PUT',
-    body: { version: listed.payload.requirements.find((item) => item.id === 'requirement-a').version, description: 'First update', type: 'functional', priority: 'Средняя', status: 'Новая' }
+    body: { version: listed.payload.requirements.find((item) => item.id === 'requirement-a').version, description: 'First update', type: 'functional', priority: 'medium', status: 'new' }
   });
   assert.equal(firstUpdate.status, 200);
   assert.equal(firstUpdate.payload.requirement.version, 2);
 
   const staleUpdate = await server.request(editor, '/api/requirements/requirement-a', {
     method: 'PUT',
-    body: { version: listed.payload.requirements.find((item) => item.id === 'requirement-a').version, description: 'Stale update', type: 'functional', priority: 'Средняя', status: 'Новая' }
+    body: { version: listed.payload.requirements.find((item) => item.id === 'requirement-a').version, description: 'Stale update', type: 'functional', priority: 'medium', status: 'new' }
   });
   assert.equal(staleUpdate.status, 409);
   assert.equal(server.store.data.requirements.find((item) => item.id === 'requirement-a').description, 'First update');
@@ -383,7 +396,7 @@ test('restores a requirement when persistence fails during update or delete', as
 
   const update = await server.request(editor, '/api/requirements/requirement-a', {
     method: 'PUT',
-    body: { version: 1, description: 'Unsaved update', type: 'functional', priority: 'Средняя', status: 'Новая' }
+    body: { version: 1, description: 'Unsaved update', type: 'functional', priority: 'medium', status: 'new' }
   });
   assert.equal(update.status, 500);
   assert.equal(server.store.data.requirements.find((item) => item.id === 'requirement-a'), originalRequirement);

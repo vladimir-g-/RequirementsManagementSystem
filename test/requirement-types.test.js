@@ -21,8 +21,8 @@ const config = {
       { id: 'functional', name: 'Функциональное' },
       { id: 'security', name: 'Безопасность' }
     ],
-    statuses: ['Новая'],
-    priorities: ['Средняя'],
+    statuses: [{ id: 'new', name: 'Новая' }],
+    priorities: [{ id: 'medium', name: 'Средняя' }],
     complexities: []
   })
 };
@@ -83,6 +83,9 @@ test('creates requirement types and validates names', async (t) => {
   const config = await server.request(member, '/api/config');
   assert.equal(config.status, 200);
   assert.deepEqual(Object.keys(config.payload).sort(), ['complexities', 'priorities', 'statuses']);
+  assert.deepEqual(config.payload.statuses, [{ id: 'new', name: 'Новая' }]);
+  assert.equal(server.store.data.requirements[0].status, 'new');
+  assert.equal(server.store.data.requirements[0].priority, 'medium');
 
   const listed = await server.request(admin, '/api/requirement-types');
   assert.equal(listed.status, 200);

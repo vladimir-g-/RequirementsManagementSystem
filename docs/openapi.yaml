@@ -1915,15 +1915,15 @@ components:
         statuses:
           type: array
           items:
-            $ref: '#/components/schemas/Status'
+            $ref: '#/components/schemas/StatusOption'
         priorities:
           type: array
           items:
-            $ref: '#/components/schemas/Priority'
+            $ref: '#/components/schemas/PriorityOption'
         complexities:
           type: array
           items:
-            $ref: '#/components/schemas/Complexity'
+            $ref: '#/components/schemas/ComplexityOption'
     RequirementType:
       type: object
       required: [id, name]
@@ -1959,13 +1959,47 @@ components:
       description: Идентификатор типа из управляемого системного справочника типов требований
     Status:
       type: string
-      enum: [Черновик, В работе, На проверке, На согласовании, Согласовано, Отменено]
+      description: ID статуса, передаваемый в API
+      enum: [draft, in-progress, under-review, pending-approval, approved, canceled, done, planned]
+    StatusOption:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          $ref: '#/components/schemas/Status'
+        name:
+          type: string
+          description: Отображаемое название статуса
+      additionalProperties: false
     Priority:
       type: string
-      enum: [Критическая, Высокая, Средняя, Низкая]
+      description: ID важности, передаваемый в API
+      enum: [critical, high, medium, low]
+    PriorityOption:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          $ref: '#/components/schemas/Priority'
+        name:
+          type: string
+          description: Отображаемое название важности
+      additionalProperties: false
     Complexity:
       type: string
-      enum: [Низкая, Средняя, Высокая]
+      description: ID сложности, передаваемый в API; пустая строка означает, что сложность не указана
+      enum: [low, medium, high, '']
+    ComplexityOption:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          enum: [low, medium, high]
+        name:
+          type: string
+          description: Отображаемое название сложности
+      additionalProperties: false
     Group:
       type: object
       required: [id, name, projectId, parentId]

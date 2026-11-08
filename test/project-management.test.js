@@ -19,8 +19,8 @@ const config = {
   load: () => ({
     projects,
     types: [{ id: 'functional', name: 'Функциональное' }],
-    statuses: ['Новая'],
-    priorities: ['Средняя'],
+    statuses: [{ id: 'new', name: 'Новая' }],
+    priorities: [{ id: 'medium', name: 'Средняя' }],
     complexities: []
   })
 };

@@ -11,6 +11,17 @@ const nonPrintablePattern = /[\u0000-\u001F\u007F-\u009F]/;
 
 export function createApp({ port, publicDir, store, config, auth }) {
   const baseConfigs = config.load();
+  let migratedReferences = false;
+  for (const [key, property] of Object.entries({ statuses: 'status', priorities: 'priority', complexities: 'complexity' })) {
+    const nameToId = new Map(baseConfigs[key].filter((item) => typeof item !== 'string').map((item) => [item.name, item.id]));
+    for (const requirement of store.data.requirements) {
+      if (nameToId.has(requirement[property])) {
+        requirement[property] = nameToId.get(requirement[property]);
+        migratedReferences = true;
+      }
+    }
+  }
+  if (migratedReferences) store.save();
   let initializedManagedLists = false;
   if (!Array.isArray(store.data.projects)) {
     store.data.projects = baseConfigs.projects.map((project) => ({ ...project }));
@@ -85,6 +96,10 @@ export function createApp({ port, publicDir, store, config, auth }) {
 
   function validValue(name, value, configs) {
     return configs[name].some((item) => typeof item === 'string' ? item === value : item.id === value);
+  }
+
+  function validOptionalValue(name, value, configs) {
+    return value === undefined || value === '' || validValue(name, value, configs);
   }
 
   function visibleProjects(user, projects) {
@@ -541,7 +556,7 @@ export function createApp({ port, publicDir, store, config, auth }) {
       if (path === '/api/requirements' && request.method === 'POST') {
         const input = await readBody(request);
         if (!auth.can(user, 'create', input.projectId)) return sendJson(response, 403, { error: 'Нет права создавать требования в этом проекте' });
-        if (!input.description || !validValue('types', input.type, configs) || !validValue('priorities', input.priority, configs) || !validValue('statuses', input.status, configs)) return sendJson(response, 400, { error: 'Заполните обязательные поля корректными значениями' });
+        if (!input.description || !validValue('types', input.type, configs) || !validValue('priorities', input.priority, configs) || !validValue('statuses', input.status, configs) || !validOptionalValue('complexities', input.complexity, configs)) return sendJson(response, 400, { error: 'Заполните обязательные поля корректными значениями' });
         const project = configs.projects.find((item) => item.id === input.projectId);
         if (!project) return sendJson(response, 400, { error: 'Указан неизвестный проект' });
         if (input.groupId && !groupForProject(input.groupId, project.id)) return sendJson(response, 400, { error: 'Указана неизвестная группа' });
@@ -608,7 +623,7 @@ export function createApp({ port, publicDir, store, config, auth }) {
         const currentVersion = requirement.version ?? 1;
         if (input.version !== currentVersion) return sendJson(response, 409, { error: 'Требование изменено другим пользователем. Обновите данные и повторите изменение' });
         const updated = { ...requirement, ...input, id: requirement.id, number: requirement.number, projectId: requirement.projectId, version: currentVersion + 1 };
-        if (!input.description || !validValue('types', input.type, configs) || !validValue('priorities', input.priority, configs) || !validValue('statuses', input.status, configs)) return sendJson(response, 400, { error: 'Заполните обязательные поля корректными значениями' });
+        if (!input.description || !validValue('types', input.type, configs) || !validValue('priorities', input.priority, configs) || !validValue('statuses', input.status, configs) || !validOptionalValue('complexities', input.complexity, configs)) return sendJson(response, 400, { error: 'Заполните обязательные поля корректными значениями' });
         if (input.groupId && !groupForProject(input.groupId, requirement.projectId)) return sendJson(response, 400, { error: 'Указана неизвестная группа' });
         updated.groupId = input.groupId || null;
         store.data.requirements[index] = updated;

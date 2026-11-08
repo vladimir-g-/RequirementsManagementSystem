@@ -18,8 +18,8 @@ const config = {
   load: () => ({
     projects,
     types: [{ id: 'functional', name: 'Функциональное' }],
-    statuses: ['Новая'],
-    priorities: ['Средняя'],
+    statuses: [{ id: 'new', name: 'Новая' }],
+    priorities: [{ id: 'medium', name: 'Средняя' }],
     complexities: []
   })
 };
@@ -116,13 +116,13 @@ test('applies permissions independently for each project', async (t) => {
 
   const updateAllowed = await server.request(limited, '/api/requirements/requirement-one', {
     method: 'PUT',
-    body: { version: 1, description: 'Updated', type: 'functional', priority: 'Средняя', status: 'Новая' }
+    body: { version: 1, description: 'Updated', type: 'functional', priority: 'medium', status: 'new' }
   });
   assert.equal(updateAllowed.status, 200);
 
   const updateDenied = await server.request(limited, '/api/requirements/requirement-two', {
     method: 'PUT',
-    body: { version: 1, description: 'Denied', type: 'functional', priority: 'Средняя', status: 'Новая' }
+    body: { version: 1, description: 'Denied', type: 'functional', priority: 'medium', status: 'new' }
   });
   assert.equal(updateDenied.status, 403);
 });
@@ -168,7 +168,7 @@ test('returns and updates per-project permissions through the users API', async 
 
   const updateSecondProject = await server.request(limited, '/api/requirements/requirement-two', {
     method: 'PUT',
-    body: { version: 1, description: 'Now allowed', type: 'functional', priority: 'Средняя', status: 'Новая' }
+    body: { version: 1, description: 'Now allowed', type: 'functional', priority: 'medium', status: 'new' }
   });
   assert.equal(updateSecondProject.status, 200);
 });
@@ -192,7 +192,7 @@ test('keeps create permission independent from read when listing project require
 
   const created = await server.request(creator, '/api/requirements', {
     method: 'POST',
-    body: { projectId: 'project-two', description: 'Created without read', type: 'functional', priority: 'Средняя', status: 'Новая' }
+    body: { projectId: 'project-two', description: 'Created without read', type: 'functional', priority: 'medium', status: 'new' }
   });
   assert.equal(created.status, 201);
   assert.equal(created.payload.requirement.projectId, 'project-two');
