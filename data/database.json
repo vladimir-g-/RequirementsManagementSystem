@@ -238,11 +238,6 @@
     },
     {
       "projectId": "project-alpha",
-      "type": "integration",
-      "prefix": "INT"
-    },
-    {
-      "projectId": "project-alpha",
       "type": "use-case",
       "prefix": "UC"
     },
@@ -270,11 +265,6 @@
       "projectId": "project-beta",
       "type": "security",
       "prefix": "SEQ"
-    },
-    {
-      "projectId": "project-beta",
-      "type": "integration",
-      "prefix": "INT"
     },
     {
       "projectId": "project-beta",
@@ -403,10 +393,6 @@
     {
       "id": "security",
       "name": "Безопасность"
-    },
-    {
-      "id": "integration",
-      "name": "Интеграционное"
     },
     {
       "id": "use-case",
