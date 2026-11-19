@@ -70,6 +70,7 @@ export function createStore(dataFile, initialData) {
   return {
     get data() { return data; },
     save,
+    withRequest: (callback) => callback(),
     defaultPermissions
   };
 }

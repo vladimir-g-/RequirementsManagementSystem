@@ -42,7 +42,7 @@ async function createTestServer(t, initialUsers = []) {
     requirements
   });
   const auth = createAuth(store);
-  const app = createApp({ port: 0, publicDir, store, config, auth });
+  const app = await createApp({ port: 0, publicDir, store, config, auth });
   await new Promise((resolve) => app.listen(resolve));
   t.after(() => new Promise((resolve, reject) => app.close((error) => error ? reject(error) : resolve())));
   const baseUrl = `http://127.0.0.1:${app.address().port}`;

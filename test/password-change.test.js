@@ -28,7 +28,7 @@ async function createTestServer(t) {
     requirementLinkTypes: []
   });
   const auth = createAuth(store);
-  const app = createApp({
+  const app = await createApp({
     port: 0,
     publicDir,
     store,
