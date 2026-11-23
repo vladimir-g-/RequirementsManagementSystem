@@ -102,7 +102,7 @@
 - [AC-0003 — Создание и нумерация требований](acceptance-criteria/AC-0003.md)
 - [AC-0004 — Изменение требования](acceptance-criteria/AC-0004.md)
 - [AC-0005 — Отображение требований из вложенных групп](acceptance-criteria/AC-0005.md)
-- [AC-0006 — Поиск, фильтрация и сортировка требований](acceptance-criteria/AC-0006.md)
+- [AC-0006 — Поиск требований](acceptance-criteria/AC-0006.md)
 - [AC-0007 — Управление пользователями и правами](acceptance-criteria/AC-0007.md)
 - [AC-0008 — Проверка префикса](acceptance-criteria/AC-0008.md)
 - [AC-0009 — Удаление требования](acceptance-criteria/AC-0009.md)
@@ -119,6 +119,8 @@
 - [AC-0020 — Управление списком проектов](acceptance-criteria/AC-0020.md)
 - [AC-0021 — Управление списком типов требований](acceptance-criteria/AC-0021.md)
 - [AC-0022 — Доступность типов требований при работе с требованиями](acceptance-criteria/AC-0022.md)
+- [AC-0023 — Фильтрация требований](acceptance-criteria/AC-0023.md)
+- [AC-0024 — Сортировка требований](acceptance-criteria/AC-0024.md)
 
 ## Открытые вопросы
 
