@@ -59,14 +59,14 @@ export function createAuth(store) {
     sessions.delete(parseCookies(request).session);
   }
 
-  function changePassword(request, userId, password) {
+  async function changePassword(request, userId, password) {
     const user = store.data.users.find((item) => item.id === userId);
     if (!user) throw new Error('Пользователь не найден');
 
     const previousPasswordHash = user.passwordHash;
     user.passwordHash = hashPassword(password);
     try {
-      store.save();
+      await store.save();
     } catch (error) {
       user.passwordHash = previousPasswordHash;
       throw error;

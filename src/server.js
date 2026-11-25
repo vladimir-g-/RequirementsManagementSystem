@@ -9,11 +9,50 @@ const permissionNames = ['create', 'read', 'update', 'delete'];
 const identifierPattern = /^[A-Za-zА-Яа-яЁё0-9_-]{1,20}$/;
 const nonPrintablePattern = /[\u0000-\u001F\u007F-\u009F]/;
 
-export function createApp({ port, publicDir, store, config, auth }) {
+function deferResponse(response) {
+  const writeHead = response.writeHead.bind(response);
+  const end = response.end.bind(response);
+  let statusCode = 200;
+  let headers = {};
+  let body;
+  let ended = false;
+
+  response.writeHead = (status, statusMessageOrHeaders, headersArgument) => {
+    statusCode = status;
+    headers = typeof statusMessageOrHeaders === 'string'
+      ? headersArgument || {}
+      : statusMessageOrHeaders || {};
+    return response;
+  };
+  response.end = (content) => {
+    body = content;
+    ended = true;
+    return response;
+  };
+
+  return {
+    flush() {
+      if (!ended) return;
+      writeHead(statusCode, headers);
+      end(body);
+    },
+    fail(error) {
+      const hasStatus = Number.isInteger(error.status);
+      statusCode = hasStatus ? error.status : 500;
+      headers = { 'Content-Type': 'application/json; charset=utf-8' };
+      body = JSON.stringify({ error: hasStatus ? error.message : 'Внутренняя ошибка сервера' });
+      ended = true;
+      this.flush();
+    }
+  };
+}
+
+export async function createApp({ port, publicDir, store, config, auth }) {
   const baseConfigs = config.load();
   let migratedReferences = false;
   for (const [key, property] of Object.entries({ statuses: 'status', priorities: 'priority', complexities: 'complexity' })) {
-    const nameToId = new Map(baseConfigs[key].filter((item) => typeof item !== 'string').map((item) => [item.name, item.id]));
+    const records = Array.isArray(store.data[key]) ? store.data[key] : baseConfigs[key];
+    const nameToId = new Map(records.filter((item) => typeof item !== 'string').map((item) => [item.name, item.id]));
     for (const requirement of store.data.requirements) {
       if (nameToId.has(requirement[property])) {
         requirement[property] = nameToId.get(requirement[property]);
@@ -21,7 +60,7 @@ export function createApp({ port, publicDir, store, config, auth }) {
       }
     }
   }
-  if (migratedReferences) store.save();
+  if (migratedReferences) await store.save();
   let initializedManagedLists = false;
   if (!Array.isArray(store.data.projects)) {
     store.data.projects = baseConfigs.projects.map((project) => ({ ...project }));
@@ -31,13 +70,17 @@ export function createApp({ port, publicDir, store, config, auth }) {
     store.data.types = baseConfigs.types.map((type) => ({ ...type }));
     initializedManagedLists = true;
   }
-  if (initializedManagedLists) store.save();
+  if (initializedManagedLists) await store.save();
 
   function loadConfigs() {
-    const configs = config.load();
-    configs.projects = store.data.projects;
-    configs.types = store.data.types;
-    return configs;
+    return {
+      ...baseConfigs,
+      statuses: Array.isArray(store.data.statuses) ? store.data.statuses : baseConfigs.statuses,
+      priorities: Array.isArray(store.data.priorities) ? store.data.priorities : baseConfigs.priorities,
+      complexities: Array.isArray(store.data.complexities) ? store.data.complexities : baseConfigs.complexities,
+      projects: store.data.projects,
+      types: store.data.types
+    };
   }
 
   function referenceConfig(configs) {
@@ -195,10 +238,12 @@ export function createApp({ port, publicDir, store, config, auth }) {
     return `${prefix}-${String(nextSequence).padStart(3, '0')}`;
   }
 
-  const server = createServer(async (request, response) => {
+  const server = createServer((request, response) => {
     const url = new URL(request.url, `http://${request.headers.host}`);
     const path = url.pathname;
-    try {
+    if (!path.startsWith('/api/')) return serveStatic(request, response);
+    const deferredResponse = deferResponse(response);
+    store.withRequest(async () => {
       if (path === '/api/auth/login' && request.method === 'POST') {
         const input = await readBody(request);
         const result = auth.login(input.username, input.password);
@@ -212,7 +257,6 @@ export function createApp({ port, publicDir, store, config, auth }) {
         return response.end();
       }
       if (path === '/api/auth/me' && request.method === 'GET') return sendJson(response, 200, { user: auth.publicUser(auth.userFromRequest(request)) });
-      if (!path.startsWith('/api/')) return serveStatic(request, response);
       const user = requireUser(request, response);
       if (!user) return;
 
@@ -225,7 +269,7 @@ export function createApp({ port, publicDir, store, config, auth }) {
 
         let result;
         try {
-          result = auth.changePassword(request, user.id, input.newPassword);
+          result = await auth.changePassword(request, user.id, input.newPassword);
         } catch (error) {
           console.error('Не удалось сохранить новый пароль пользователя:', error);
           return sendJson(response, 500, { error: 'Не удалось сохранить новый пароль' });
@@ -249,7 +293,7 @@ export function createApp({ port, publicDir, store, config, auth }) {
         if (error) return sendJson(response, 400, { error });
         const project = { id: randomUUID(), name, code };
         store.data.projects.push(project);
-        store.save();
+        await store.save();
         return sendJson(response, 201, { project });
       }
       const projectMatch = path.match(/^\/api\/projects\/([^/]+)$/);
@@ -271,7 +315,7 @@ export function createApp({ port, publicDir, store, config, auth }) {
           });
           store.data.requirementPrefixes = previousPrefixes.filter((item) => item.projectId !== project.id);
           try {
-            store.save();
+            await store.save();
           } catch (saveError) {
             store.data.projects = previousProjects;
             store.data.users = previousUsers;
@@ -292,7 +336,7 @@ export function createApp({ port, publicDir, store, config, auth }) {
         }
         const updated = { ...project, name, code };
         store.data.projects[index] = updated;
-        store.save();
+        await store.save();
         return sendJson(response, 200, { project: updated });
       }
       if (path === '/api/requirement-types' && request.method === 'GET') {
@@ -306,7 +350,7 @@ export function createApp({ port, publicDir, store, config, auth }) {
         if (error) return sendJson(response, 400, { error });
         const type = { id: randomUUID(), name };
         store.data.types.push(type);
-        store.save();
+        await store.save();
         return sendJson(response, 201, { type });
       }
       const requirementTypeMatch = path.match(/^\/api\/requirement-types\/([^/]+)$/);
@@ -319,7 +363,7 @@ export function createApp({ port, publicDir, store, config, auth }) {
           if (store.data.requirements.some((requirement) => requirement.type === type.id)) return sendJson(response, 409, { error: 'Тип требования используется требованиями и не может быть удалён' });
           store.data.types.splice(index, 1);
           store.data.requirementPrefixes = store.data.requirementPrefixes.filter((item) => item.type !== type.id);
-          store.save();
+          await store.save();
           return sendJson(response, 200, { ok: true });
         }
         const input = await readBody(request);
@@ -328,7 +372,7 @@ export function createApp({ port, publicDir, store, config, auth }) {
         if (error) return sendJson(response, 400, { error });
         const updated = { ...type, name };
         store.data.types[index] = updated;
-        store.save();
+        await store.save();
         return sendJson(response, 200, { type: updated });
       }
       if (path === '/api/groups' && request.method === 'GET') {
@@ -347,7 +391,7 @@ export function createApp({ port, publicDir, store, config, auth }) {
         if (!name || name.length > 200) return sendJson(response, 400, { error: 'Укажите название группы длиной до 200 символов' });
         if (parentId && !groupForProject(parentId, input.projectId)) return sendJson(response, 400, { error: 'Указана неизвестная родительская группа' });
         const group = { id: randomUUID(), name, projectId: input.projectId, parentId };
-        store.data.groups.push(group); store.save(); return sendJson(response, 201, { group });
+        store.data.groups.push(group); await store.save(); return sendJson(response, 201, { group });
       }
       const groupMatch = path.match(/^\/api\/groups\/([^/]+)$/);
       if (groupMatch) {
@@ -360,7 +404,7 @@ export function createApp({ port, publicDir, store, config, auth }) {
           if (request.method === 'DELETE') {
             if (store.data.requirements.some((item) => item.groupId === group.id)) return sendJson(response, 409, { error: 'Нельзя удалить группу, пока в ней есть требования' });
             if (store.data.groups.some((item) => item.parentId === group.id)) return sendJson(response, 409, { error: 'Сначала удалите дочерние группы' });
-            store.data.groups.splice(store.data.groups.indexOf(group), 1); store.save(); return sendJson(response, 200, { ok: true });
+            store.data.groups.splice(store.data.groups.indexOf(group), 1); await store.save(); return sendJson(response, 200, { ok: true });
           }
           const input = await readBody(request);
           const name = String(input.name || '').trim();
@@ -368,7 +412,7 @@ export function createApp({ port, publicDir, store, config, auth }) {
           if (!name || name.length > 200) return sendJson(response, 400, { error: 'Укажите название группы длиной до 200 символов' });
           if (parentId && (!groupForProject(parentId, group.projectId) || parentId === group.id || hasGroupDescendant(group.id, parentId))) return sendJson(response, 400, { error: 'Некорректная родительская группа' });
           const updated = { ...group, name, parentId };
-          store.data.groups[store.data.groups.indexOf(group)] = updated; store.save(); return sendJson(response, 200, { group: updated });
+          store.data.groups[store.data.groups.indexOf(group)] = updated; await store.save(); return sendJson(response, 200, { group: updated });
         }
       }
       if (path === '/api/requirement-prefixes' && request.method === 'GET') {
@@ -384,7 +428,7 @@ export function createApp({ port, publicDir, store, config, auth }) {
         const valid = prefixes.every((item) => configs.projects.some((project) => project.id === item.projectId) && validValue('types', item.type, configs) && identifierPattern.test(item.prefix));
         const unique = new Set(prefixes.map((item) => `${item.projectId}:${item.type}`)).size === prefixes.length;
         if (!valid || !unique) return sendJson(response, 400, { error: 'Проверьте проекты, типы и формат префиксов' });
-        store.data.requirementPrefixes = prefixes; store.save(); return sendJson(response, 200, { prefixes });
+        store.data.requirementPrefixes = prefixes; await store.save(); return sendJson(response, 200, { prefixes });
       }
 
       if (path === '/api/requirement-link-types' && request.method === 'GET') {
@@ -399,7 +443,7 @@ export function createApp({ port, publicDir, store, config, auth }) {
         if (store.data.requirementLinkTypes.some((item) => item.name.toLocaleLowerCase('ru') === name.toLocaleLowerCase('ru'))) return sendJson(response, 409, { error: 'Тип связи с таким названием уже существует' });
         const type = { id: randomUUID(), name, directed: input.directed };
         store.data.requirementLinkTypes.push(type);
-        store.save();
+        await store.save();
         return sendJson(response, 201, { type });
       }
       const linkTypeMatch = path.match(/^\/api\/requirement-link-types\/([^/]+)$/);
@@ -412,7 +456,7 @@ export function createApp({ port, publicDir, store, config, auth }) {
           const removedLinks = store.data.requirementLinks.filter((item) => item.typeId === typeId).length;
           store.data.requirementLinks = store.data.requirementLinks.filter((item) => item.typeId !== typeId);
           store.data.requirementLinkTypes.splice(index, 1);
-          store.save();
+          await store.save();
           return sendJson(response, 200, { ok: true, removedLinks });
         }
         const input = await readBody(request);
@@ -421,7 +465,7 @@ export function createApp({ port, publicDir, store, config, auth }) {
         if (store.data.requirementLinkTypes.some((item, itemIndex) => itemIndex !== index && item.name.toLocaleLowerCase('ru') === name.toLocaleLowerCase('ru'))) return sendJson(response, 409, { error: 'Тип связи с таким названием уже существует' });
         const type = { ...store.data.requirementLinkTypes[index], name, directed: input.directed };
         store.data.requirementLinkTypes[index] = type;
-        store.save();
+        await store.save();
         return sendJson(response, 200, { type });
       }
 
@@ -475,7 +519,7 @@ export function createApp({ port, publicDir, store, config, auth }) {
           typeId: type.id
         };
         store.data.requirementLinks.push(link);
-        store.save();
+        await store.save();
         return sendJson(response, 201, { link: { ...link, type, requirementA, requirementB } });
       }
       const requirementLinkMatch = path.match(/^\/api\/requirement-links\/([^/]+)$/);
@@ -485,7 +529,7 @@ export function createApp({ port, publicDir, store, config, auth }) {
         const link = store.data.requirementLinks[index];
         if (!auth.can(user, 'read', link.projectId) || !auth.can(user, 'update', link.projectId)) return sendJson(response, 403, { error: 'Для удаления связей нужны права чтения и изменения в проекте' });
         store.data.requirementLinks.splice(index, 1);
-        store.save();
+        await store.save();
         return sendJson(response, 200, { ok: true });
       }
 
@@ -521,7 +565,7 @@ export function createApp({ port, publicDir, store, config, auth }) {
         if (!normalized.username || !normalized.name || !input.password || store.data.users.some((item) => item.username === normalized.username)) return sendJson(response, 400, { error: 'Заполните данные и используйте уникальный логин' });
         if (normalized.projectIds.some((id) => !configs.projects.some((project) => project.id === id))) return sendJson(response, 400, { error: 'Указан неизвестный проект' });
         const created = { id: randomUUID(), ...normalized, passwordHash: auth.hashPassword(input.password) };
-        store.data.users.push(created); store.save(); return sendJson(response, 201, { user: auth.publicUser(created) });
+        store.data.users.push(created); await store.save(); return sendJson(response, 201, { user: auth.publicUser(created) });
       }
       const userMatch = path.match(/^\/api\/users\/([^/]+)$/);
       if (userMatch && ['PUT', 'DELETE'].includes(request.method)) {
@@ -530,14 +574,14 @@ export function createApp({ port, publicDir, store, config, auth }) {
         if (index < 0) return sendJson(response, 404, { error: 'Пользователь не найден' });
         if (request.method === 'DELETE') {
           if (store.data.users[index].id === user.id) return sendJson(response, 400, { error: 'Нельзя удалить текущего пользователя' });
-          store.data.users.splice(index, 1); store.save(); return sendJson(response, 200, { ok: true });
+          store.data.users.splice(index, 1); await store.save(); return sendJson(response, 200, { ok: true });
         }
         const input = await readBody(request);
         const normalized = normalizeUser(input, store.data.users[index]);
         if (!normalized.username || !normalized.name || store.data.users.some((item, itemIndex) => itemIndex !== index && item.username === normalized.username)) return sendJson(response, 400, { error: 'Заполните данные и используйте уникальный логин' });
         if (normalized.projectIds.some((id) => !configs.projects.some((project) => project.id === id))) return sendJson(response, 400, { error: 'Указан неизвестный проект' });
         const updated = { ...store.data.users[index], ...normalized, ...(input.password ? { passwordHash: auth.hashPassword(input.password) } : {}) };
-        store.data.users[index] = updated; store.save(); return sendJson(response, 200, { user: auth.publicUser(updated) });
+        store.data.users[index] = updated; await store.save(); return sendJson(response, 200, { user: auth.publicUser(updated) });
       }
 
       if (path === '/api/requirements' && request.method === 'GET') {
@@ -588,7 +632,7 @@ export function createApp({ port, publicDir, store, config, auth }) {
         store.data.requirements = [...previousRequirements, requirement];
         store.data.requirementLinks = [...previousLinks, ...linksToCreate];
         try {
-          store.save();
+          await store.save();
         } catch (error) {
           store.data.requirements = previousRequirements;
           store.data.requirementLinks = previousLinks;
@@ -610,7 +654,7 @@ export function createApp({ port, publicDir, store, config, auth }) {
           store.data.requirements = previousRequirements.filter((item) => item.id !== requirement.id);
           store.data.requirementLinks = previousLinks.filter((item) => item.requirementAId !== requirement.id && item.requirementBId !== requirement.id);
           try {
-            store.save();
+            await store.save();
           } catch (error) {
             store.data.requirements = previousRequirements;
             store.data.requirementLinks = previousLinks;
@@ -628,7 +672,7 @@ export function createApp({ port, publicDir, store, config, auth }) {
         updated.groupId = input.groupId || null;
         store.data.requirements[index] = updated;
         try {
-          store.save();
+          await store.save();
         } catch (error) {
           store.data.requirements[index] = requirement;
           throw error;
@@ -636,9 +680,7 @@ export function createApp({ port, publicDir, store, config, auth }) {
         return sendJson(response, 200, { requirement: updated });
       }
       return sendJson(response, 404, { error: 'Маршрут не найден' });
-    } catch (error) {
-      return sendJson(response, error.status || 500, { error: error.status ? error.message : 'Внутренняя ошибка сервера' });
-    }
+    }, { readOnly: request.method === 'GET' }).then(() => deferredResponse.flush()).catch((error) => deferredResponse.fail(error));
   });
 
   return {

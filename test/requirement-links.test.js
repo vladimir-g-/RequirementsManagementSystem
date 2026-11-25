@@ -52,7 +52,7 @@ async function createTestServer(t) {
     { id: 'remover', username: 'remover', passwordHash, name: 'Remover', role: 'Пользователь', projectIds: ['project-one'], projectPermissions: { 'project-one': { create: false, read: true, update: false, delete: true } } }
   );
   store.save();
-  const app = createApp({ port: 0, publicDir, store, config, auth });
+  const app = await createApp({ port: 0, publicDir, store, config, auth });
   await new Promise((resolve) => app.listen(resolve));
   t.after(() => new Promise((resolve, reject) => app.close((error) => error ? reject(error) : resolve())));
   const address = app.address();
