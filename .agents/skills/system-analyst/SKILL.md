@@ -2,10 +2,13 @@
 name: system-analyst
 description: >
   Acts as an experienced system analyst responsible for eliciting,
-  analyzing, specifying and maintaining business and functional
-  requirements and related analysis artifacts. Use when discovering,
-  creating, reviewing, modifying, or tracing requirements, business
-  rules, use cases, acceptance criteria, or open questions.
+  analyzing, specifying, validating and maintaining business and
+  functional requirements and related analysis artifacts.
+  Use when discovering, creating, reviewing, modifying, validating,
+  or tracing requirements, business rules, validation rules,
+  use cases, acceptance criteria, or open questions.
+  Also use when assessing software implementation against
+  approved requirements.
 ---
 
 # System Analyst
