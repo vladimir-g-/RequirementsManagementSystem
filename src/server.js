@@ -488,7 +488,7 @@ export async function createApp({ port, publicDir, store, config, auth }) {
       if (requirementLinkOptionsMatch && request.method === 'GET') {
         const requirement = store.data.requirements.find((item) => item.id === requirementLinkOptionsMatch[1]);
         if (!requirement) return sendJson(response, 404, { error: 'Требование не найдено' });
-        if (!auth.can(user, 'read', requirement.projectId) || !auth.can(user, 'update', requirement.projectId)) return sendJson(response, 403, { error: 'Для создания связей нужны права чтения и изменения в проекте' });
+        if (!auth.can(user, 'update', requirement.projectId)) return sendJson(response, 403, { error: 'Для создания связей требуется право изменения в проекте' });
         return sendJson(response, 200, { types: store.data.requirementLinkTypes });
       }
       if (path === '/api/requirement-link-options' && request.method === 'GET') {
@@ -502,7 +502,7 @@ export async function createApp({ port, publicDir, store, config, auth }) {
         const requirementA = store.data.requirements.find((item) => item.id === input.requirementAId);
         const requirementB = store.data.requirements.find((item) => item.id === input.requirementBId);
         if (!requirementA || !requirementB) return sendJson(response, 404, { error: 'Одно из требований не найдено' });
-        if (!auth.can(user, 'read', requirementA.projectId) || !auth.can(user, 'update', requirementA.projectId)) return sendJson(response, 403, { error: 'Для создания связей нужны права чтения и изменения в проекте' });
+        if (!auth.can(user, 'update', requirementA.projectId)) return sendJson(response, 403, { error: 'Для создания связей требуется право изменения в проекте' });
         if (requirementA.id === requirementB.id) return sendJson(response, 400, { error: 'Нельзя связать требование с самим собой' });
         if (requirementA.projectId !== requirementB.projectId) return sendJson(response, 400, { error: 'Связывать можно только требования одного проекта' });
         const type = store.data.requirementLinkTypes.find((item) => item.id === input.typeId);
