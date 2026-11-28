@@ -100,6 +100,13 @@ test('creates, displays, and deletes requirement links with project access check
   assert.equal(viewFromB.payload.links[0].requirementA.number, 'ONE-001');
   assert.equal(viewFromB.payload.links[0].requirementB.number, 'ONE-002');
   assert.equal(viewFromB.payload.links[0].type.directed, true);
+  const cardFromB = await server.request(reader, '/api/requirements/requirement-b');
+  assert.equal(cardFromB.status, 200);
+  assert.equal(cardFromB.payload.requirement.number, 'ONE-002');
+  assert.equal(cardFromB.payload.links.length, 1);
+  assert.equal(cardFromB.payload.links[0].requirementA.number, 'ONE-001');
+  assert.equal((await server.request(updater, '/api/requirements/requirement-b')).status, 403);
+  assert.equal((await server.request(reader, '/api/requirements/requirement-missing')).status, 404);
   assert.equal((await server.request(updater, '/api/requirements/requirement-a/links')).status, 403);
   const options = await server.request(editor, '/api/requirements/requirement-a/link-options');
   assert.equal(options.status, 200);
@@ -130,7 +137,11 @@ test('creates, displays, and deletes requirement links with project access check
     method: 'POST',
     body: { requirementAId: 'requirement-a', requirementBId: 'requirement-c', typeId: 'link-clarifies' }
   })).status, 403);
-  assert.equal((await server.request(updater, '/api/requirements/search?projectId=project-one&excludeId=requirement-a&search=second')).status, 403);
+  const searchWithoutRead = await server.request(updater, '/api/requirements/search?projectId=project-one&excludeId=requirement-a&search=second');
+  assert.equal(searchWithoutRead.status, 403);
+  const searchForLink = await server.request(reader, '/api/requirements/search?projectId=project-one&excludeId=requirement-a&search=second');
+  assert.equal(searchForLink.status, 200);
+  assert.deepEqual(searchForLink.payload.requirements.map((item) => item.id), ['requirement-b']);
 
   const linkId = created.payload.link.id;
   assert.equal((await server.request(reader, `/api/requirement-links/${linkId}`, { method: 'DELETE' })).status, 403);
@@ -325,24 +336,23 @@ test('removes links when a requirement is deleted and preserves the related requ
   assert.equal(deleted.status, 403);
 
   const deleter = await server.login('deleter');
-  assert.equal((await server.request(deleter, '/api/requirements/requirement-a', { method: 'DELETE' })).status, 403);
-
-  const admin = await server.login('admin');
-  assert.equal((await server.request(admin, '/api/requirements/requirement-a', { method: 'DELETE' })).status, 200);
+  assert.equal((await server.request(deleter, '/api/requirements/requirement-a', { method: 'DELETE' })).status, 200);
   assert.equal(server.store.data.requirements.some((item) => item.id === 'requirement-b'), true);
   assert.deepEqual(server.store.data.requirementLinks, []);
+  assert.equal((await server.request(deleter, '/api/requirements/requirement-a')).status, 404);
 });
 
-test('requires read together with update and rejects stale requirement updates', async (t) => {
+test('allows update without read and rejects stale requirement updates', async (t) => {
   const server = await createTestServer(t);
   const editor = await server.login('editor');
   const updater = await server.login('updater');
 
-  const forbidden = await server.request(updater, '/api/requirements/requirement-a', {
+  const updateWithoutRead = await server.request(updater, '/api/requirements/requirement-b', {
     method: 'PUT',
-    body: { version: 1, description: 'Unauthorized update', type: 'functional', priority: 'medium', status: 'new' }
+    body: { version: 1, description: 'Update without read', type: 'functional', priority: 'medium', status: 'new' }
   });
-  assert.equal(forbidden.status, 403);
+  assert.equal(updateWithoutRead.status, 200);
+  assert.equal(updateWithoutRead.payload.requirement.version, 2);
 
   const listed = await server.request(editor, '/api/requirements?projectId=project-one');
   assert.equal(listed.status, 200);
@@ -369,7 +379,7 @@ test('requires read together with update and rejects stale requirement updates',
   assert.equal(server.store.data.requirements.find((item) => item.id === 'requirement-a').description, 'First update');
 });
 
-test('allows requirement deletion only with read and delete permissions', async (t) => {
+test('allows requirement deletion with delete permission only', async (t) => {
   const server = await createTestServer(t);
   const remover = await server.login('remover');
 

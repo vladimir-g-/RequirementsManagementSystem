@@ -907,11 +907,11 @@ function bindNewRequirementLinks(projectId) {
   }
   return () => links.map(({ requirementId, typeId }) => ({ requirementId, typeId }));
 }
-async function bindRequirementLinks(item) {
+async function bindRequirementLinks(item, initialLinks) {
   if (!item) return;
   const section = document.querySelector('#related-requirements');
-  const manageLinks = can('read') && can('update');
-  let links = [];
+  const manageLinks = can('update');
+  let links = Array.isArray(initialLinks) ? initialLinks : null;
   let linkTypes = [];
   let selectedRequirement = null;
   let searchSequence = 0;
@@ -965,7 +965,7 @@ async function bindRequirementLinks(item) {
         selectedRequirement = null;
         searchInput.value = '';
         searchResults.innerHTML = '';
-        await load();
+        await load(true);
       } catch (requestError) {
         error.textContent = requestError.message;
         refreshAddButton();
@@ -976,19 +976,19 @@ async function bindRequirementLinks(item) {
         if (!confirm('Удалить связь между требованиями?')) return;
         try {
           await api(`/api/requirement-links/${button.dataset.linkId}`, { method: 'DELETE' });
-          await load();
+          await load(true);
         } catch (requestError) {
           error.textContent = requestError.message;
         }
       };
     });
   };
-  const load = async () => {
+  const load = async (reloadLinks = false) => {
     try {
-      const requests = [api(`/api/requirements/${item.id}/links`)];
-      if (manageLinks) requests.push(api(`/api/requirements/${item.id}/link-options`));
-      const [linkResult, typeResult] = await Promise.all(requests);
-      links = linkResult.links;
+      const linkRequest = reloadLinks || !links ? api(`/api/requirements/${item.id}/links`) : null;
+      const typeRequest = manageLinks ? api(`/api/requirements/${item.id}/link-options`) : null;
+      const [linkResult, typeResult] = await Promise.all([linkRequest, typeRequest]);
+      if (linkResult) links = linkResult.links;
       linkTypes = typeResult?.types || [];
       render();
     } catch (error) {
@@ -997,7 +997,26 @@ async function bindRequirementLinks(item) {
   };
   await load();
 }
-function openModal(item = null) {
+function showModalMessage(message) {
+  document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop" id="modal"><div class="modal"><div class="modal-header"><div><p class="eyebrow">Карточка требования</p></div><button type="button" class="close" id="close" aria-label="Закрыть">×</button></div><p class="error" role="alert">${esc(message)}</p><div class="modal-actions"><button type="button" class="cancel" id="cancel">Закрыть</button></div></div></div>`);
+  const modal = document.querySelector('#modal');
+  const close = () => modal.remove();
+  document.querySelector('#close').onclick = close;
+  document.querySelector('#cancel').onclick = close;
+}
+async function openModal(item = null) {
+  let initialLinks = null;
+  if (item) {
+    try {
+      const result = await api(`/api/requirements/${item.id}`);
+      item = result.requirement;
+      initialLinks = result.links;
+    } catch (error) {
+      if (error.status === 404 || error.status === 403) await refresh();
+      showModalMessage(error.message);
+      return;
+    }
+  }
   const readOnly = Boolean(item && !can('update'));
   document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop" id="modal"><form class="modal" id="requirement-form">
     <div class="modal-header"><div><p class="eyebrow">${readOnly ? 'Просмотр' : item ? 'Редактирование' : 'Новая запись'}</p><h2>${readOnly ? 'Карточка требования' : item ? 'Изменить требование' : 'Добавить требование'}</h2></div><button type="button" class="close" id="close" aria-label="Закрыть">×</button></div>
@@ -1059,7 +1078,7 @@ function openModal(item = null) {
   });
   const getDraftLinks = item ? () => [] : bindNewRequirementLinks(state.filters.projectId);
   document.querySelector('#requirement-form').onsubmit = async (event) => { event.preventDefault(); const body = Object.fromEntries(new FormData(event.currentTarget)); body.projectId = item?.projectId || state.filters.projectId; if (item) body.version = item.version; else body.links = getDraftLinks(); try { await api(item ? `/api/requirements/${item.id}` : '/api/requirements', { method: item ? 'PUT' : 'POST', body: JSON.stringify(body) }); close(); await refresh(); } catch (error) { document.querySelector('#form-error').textContent = error.message; } };
-  if (item) bindRequirementLinks(item);
+  if (item) bindRequirementLinks(item, initialLinks);
 }
 async function deleteRequirement(id) { if (!confirm('Удалить это требование?')) return; await api(`/api/requirements/${id}`, { method: 'DELETE' }); await refresh(); }
 

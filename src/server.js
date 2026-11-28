@@ -183,6 +183,17 @@ export async function createApp({ port, publicDir, store, config, auth }) {
     return groups.filter((item) => auth.can(user, 'read', item.projectId));
   }
 
+  function requirementLinks(requirementId) {
+    return store.data.requirementLinks
+      .filter((item) => item.requirementAId === requirementId || item.requirementBId === requirementId)
+      .map((item) => ({
+        ...item,
+        type: store.data.requirementLinkTypes.find((type) => type.id === item.typeId) || null,
+        requirementA: store.data.requirements.find((candidate) => candidate.id === item.requirementAId) || null,
+        requirementB: store.data.requirements.find((candidate) => candidate.id === item.requirementBId) || null
+      }));
+  }
+
   function hasAnyProjectPermission(user, action) {
     return user.projectIds?.some((projectId) => auth.can(user, action, projectId)) || false;
   }
@@ -475,15 +486,7 @@ export async function createApp({ port, publicDir, store, config, auth }) {
         const requirement = store.data.requirements.find((item) => item.id === requirementLinksMatch[1]);
         if (!requirement) return sendJson(response, 404, { error: 'Требование не найдено' });
         if (!auth.can(user, 'read', requirement.projectId)) return sendJson(response, 403, { error: 'Нет права просматривать связи требований в этом проекте' });
-        const links = store.data.requirementLinks
-          .filter((item) => item.requirementAId === requirement.id || item.requirementBId === requirement.id)
-          .map((item) => ({
-            ...item,
-            type: store.data.requirementLinkTypes.find((type) => type.id === item.typeId) || null,
-            requirementA: store.data.requirements.find((candidate) => candidate.id === item.requirementAId) || null,
-            requirementB: store.data.requirements.find((candidate) => candidate.id === item.requirementBId) || null
-          }));
-        return sendJson(response, 200, { links });
+        return sendJson(response, 200, { links: requirementLinks(requirement.id) });
       }
       if (requirementLinkOptionsMatch && request.method === 'GET') {
         const requirement = store.data.requirements.find((item) => item.id === requirementLinkOptionsMatch[1]);
@@ -527,7 +530,7 @@ export async function createApp({ port, publicDir, store, config, auth }) {
         const index = store.data.requirementLinks.findIndex((item) => item.id === requirementLinkMatch[1]);
         if (index < 0) return sendJson(response, 404, { error: 'Связь не найдена' });
         const link = store.data.requirementLinks[index];
-        if (!auth.can(user, 'read', link.projectId) || !auth.can(user, 'update', link.projectId)) return sendJson(response, 403, { error: 'Для удаления связей нужны права чтения и изменения в проекте' });
+        if (!auth.can(user, 'update', link.projectId)) return sendJson(response, 403, { error: 'Для удаления связей требуется право изменения в проекте' });
         store.data.requirementLinks.splice(index, 1);
         await store.save();
         return sendJson(response, 200, { ok: true });
@@ -540,7 +543,7 @@ export async function createApp({ port, publicDir, store, config, auth }) {
         if (sourceId) {
           const source = store.data.requirements.find((item) => item.id === sourceId);
           if (!source || source.projectId !== projectId) return sendJson(response, 400, { error: 'Указано некорректное требование для поиска' });
-          if (!auth.can(user, 'read', projectId) || !auth.can(user, 'update', projectId)) return sendJson(response, 403, { error: 'Для поиска требования для связи нужны права чтения и изменения в проекте' });
+          if (!auth.can(user, 'read', projectId)) return sendJson(response, 403, { error: 'Для поиска требования для связи требуется право чтения в проекте' });
         } else if (!auth.can(user, 'create', projectId) || !auth.can(user, 'read', projectId)) {
           return sendJson(response, 403, { error: 'Для поиска требований при создании нужны права создания и чтения в проекте' });
         }
@@ -597,6 +600,15 @@ export async function createApp({ port, publicDir, store, config, auth }) {
         return sendJson(response, 200, { requirements, releases });
       }
       const requirementMatch = path.match(/^\/api\/requirements\/([^/]+)$/);
+      if (requirementMatch && request.method === 'GET') {
+        const requirement = store.data.requirements.find((item) => item.id === requirementMatch[1]);
+        if (!requirement) return sendJson(response, 404, { error: 'Требование не найдено' });
+        if (!auth.can(user, 'read', requirement.projectId)) return sendJson(response, 403, { error: 'Нет права просматривать требование в этом проекте' });
+        return sendJson(response, 200, {
+          requirement: { ...requirement, version: requirement.version ?? 1 },
+          links: requirementLinks(requirement.id)
+        });
+      }
       if (path === '/api/requirements' && request.method === 'POST') {
         const input = await readBody(request);
         if (!auth.can(user, 'create', input.projectId)) return sendJson(response, 403, { error: 'Нет права создавать требования в этом проекте' });
@@ -645,8 +657,12 @@ export async function createApp({ port, publicDir, store, config, auth }) {
         if (index < 0) return sendJson(response, 404, { error: 'Требование не найдено' });
         const requirement = store.data.requirements[index];
         const requiredPermission = request.method === 'DELETE' ? 'delete' : 'update';
-        if (!auth.can(user, 'read', requirement.projectId) || !auth.can(user, requiredPermission, requirement.projectId)) {
-          return sendJson(response, 403, { error: `Для этой операции нужны права read и ${requiredPermission} в проекте` });
+        if (!auth.can(user, requiredPermission, requirement.projectId)) {
+          return sendJson(response, 403, {
+            error: request.method === 'DELETE'
+              ? 'Для удаления требования требуется право удаления в проекте'
+              : 'Для изменения требования требуется право изменения в проекте'
+          });
         }
         if (request.method === 'DELETE') {
           const previousRequirements = store.data.requirements;
